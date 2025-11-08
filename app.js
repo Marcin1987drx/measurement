@@ -1447,7 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
-        // Position tooltip directly below the cell
+        // Position tooltip directly below the cell, accounting for scroll
         try {
             const cellRect = cell.getBoundingClientRect();
             const scrollContainer = dom.dbTable.parentElement;
@@ -1459,9 +1459,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 popup.style.top = `${cellRect.bottom + 2}px`; // 2px gap below cell
             } else {
                 const modalBodyRect = modalBody.getBoundingClientRect();
-                // Position relative to modal body, directly below the cell
-                const left = cellRect.left - modalBodyRect.left + scrollContainer.scrollLeft;
-                const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop + 2; // 2px gap
+                // Position relative to modal body
+                // cellRect already accounts for scroll (viewport coordinates)
+                // so we just need to convert from viewport to modalBody coordinates
+                const left = cellRect.left - modalBodyRect.left;
+                const top = cellRect.bottom - modalBodyRect.top + 2; // 2px gap
                 popup.style.left = `${left}px`;
                 popup.style.top = `${top}px`;
             }
