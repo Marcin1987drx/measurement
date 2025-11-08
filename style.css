@@ -220,27 +220,76 @@ body.editor-open .main-content { transition: padding-right var(--transition-spee
     color: var(--status-error);
 }
 
-/* NEW: Suggestions Popup */
+/* Suggestions Popup - Enhanced with animations and better styling */
 .suggestions-popup {
     position: absolute;
     display: none;
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-md);
-    max-height: 200px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    max-height: 250px;
+    min-width: 200px;
     overflow-y: auto;
     z-index: 5000;
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.suggestions-popup.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 .suggestion-item {
-    padding: 8px 12px;
+    padding: 10px 14px;
     cursor: pointer;
-    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease;
+}
+.suggestion-item:last-child {
+    border-bottom: none;
 }
 .suggestion-item:hover, .suggestion-item.active {
-    background-color: var(--bg-tertiary);
+    background-color: var(--accent-color);
+    color: white;
 }
-.suggestion-item small {
+.suggestion-item.active .suggestion-desc,
+.suggestion-item.active .suggestion-type {
+    color: rgba(255, 255, 255, 0.85);
+}
+.suggestion-name {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.suggestion-desc {
+    font-size: 0.8em;
     color: var(--text-secondary);
-    margin-left: 8px;
+    font-style: italic;
+}
+.suggestion-type {
+    font-size: 0.75em;
+    color: var(--accent-color);
+    font-weight: 500;
+}
+.suggestion-item:hover .suggestion-type,
+.suggestion-item.active .suggestion-type {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Scrollbar styling for suggestions popup */
+.suggestions-popup::-webkit-scrollbar {
+    width: 6px;
+}
+.suggestions-popup::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+.suggestions-popup::-webkit-scrollbar-thumb {
+    background: var(--text-secondary);
+    border-radius: 3px;
+}
+.suggestions-popup::-webkit-scrollbar-thumb:hover {
+    background: var(--text-primary);
 }

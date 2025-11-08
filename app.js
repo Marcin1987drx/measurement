@@ -1355,10 +1355,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return { position, textBefore };
     };
 
+    /**
+     * Update formula suggestions based on current cell content and caret position
+     * Triggers on: empty field, typing '=', '[', ']', or any character while in formula mode
+     * @param {HTMLElement} cell - The editable cell element
+     */
     const updateFormulaSuggestions = (cell) => {
         const { textBefore } = getCaretPositionInfo(cell);
         const formula = cell.textContent;
 
+        // If empty field, show default function list
+        if (formula.trim() === '') {
+            const suggestions = AVAILABLE_FUNCTIONS.map(f => ({ ...f, type: 'function' }));
+            showSuggestions(suggestions, cell);
+            return;
+        }
+
+        // Must start with '=' for formula mode
         if (!formula.startsWith('=')) {
             hideSuggestions();
             return;
@@ -1367,13 +1380,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const openBracketIndex = textBefore.lastIndexOf('[');
         const closeBracketIndex = textBefore.lastIndexOf(']');
         
-        if (openBracketIndex > closeBracketIndex) { // Inside a column tag
+        // Inside a column reference [...]
+        if (openBracketIndex > closeBracketIndex) {
             const filter = textBefore.substring(openBracketIndex + 1);
             const suggestions = appState.data.dbHeaders
                 .filter(h => !READONLY_COLS.includes(h) && h.toLowerCase().includes(filter.toLowerCase()))
                 .map(h => ({ name: h, type: 'column' }));
             showSuggestions(suggestions, cell);
-        } else { // Outside a column tag, suggest functions
+        } else {
+            // Outside a column tag, suggest functions
             const lastWordMatch = textBefore.match(/(\w+)$/);
             const filter = lastWordMatch ? lastWordMatch[1] : '';
             const suggestions = AVAILABLE_FUNCTIONS
@@ -1383,6 +1398,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    /**
+     * Show suggestions popup near the active cell
+     * Positions dynamically and adds fade-in animation
+     * @param {Array} items - Array of suggestion items {name, type, description?}
+     * @param {HTMLElement} cell - The target cell element
+     */
     const showSuggestions = (items, cell) => {
         const popup = dom.formulaSuggestions;
         appState.ui.formulaSuggestions.items = items;
@@ -1394,29 +1415,62 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Render suggestions with type indicator
         popup.innerHTML = items.map(item => `
             <div class="suggestion-item" data-value="${item.name}">
                 <span class="suggestion-name">${item.name}</span>
+                ${item.type === 'column' ? '<span class="suggestion-type">[Column]</span>' : ''}
                 ${item.description ? `<span class="suggestion-desc">${item.description}</span>` : ''}
             </div>
         `).join('');
 
+        // Dynamic positioning near the cell
         const cellRect = cell.getBoundingClientRect();
-        const scrollContainer = dom.dbTable.parentElement; // The scrolling container
+        const scrollContainer = dom.dbTable.parentElement;
+        const modalBody = scrollContainer.parentElement; // modal-body
+        const modalBodyRect = modalBody.getBoundingClientRect();
 
+        // Calculate position relative to modal body
+        const left = cellRect.left - modalBodyRect.left + scrollContainer.scrollLeft;
+        const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop;
+
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
         popup.style.display = 'block';
-        popup.style.left = `${cellRect.left + scrollContainer.scrollLeft}px`;
-        popup.style.top = `${cellRect.bottom + scrollContainer.scrollTop - 2}px`;
+        
+        // Trigger fade-in animation
+        requestAnimationFrame(() => {
+            popup.classList.add('visible');
+        });
+        
         appState.ui.formulaSuggestions.visible = true;
     };
 
+    /**
+     * Hide suggestions popup with fade-out animation
+     */
     const hideSuggestions = () => {
-        dom.formulaSuggestions.style.display = 'none';
+        const popup = dom.formulaSuggestions;
+        popup.classList.remove('visible');
+        
+        // Wait for fade-out animation before hiding
+        setTimeout(() => {
+            if (!appState.ui.formulaSuggestions.visible) {
+                popup.style.display = 'none';
+            }
+        }, 200); // Match CSS transition duration
+        
         appState.ui.formulaSuggestions.visible = false;
         appState.ui.formulaSuggestions.items = [];
         appState.ui.formulaSuggestions.activeIndex = -1;
     };
 
+    /**
+     * Handle keyboard navigation within suggestions popup
+     * Supports: ArrowDown, ArrowUp, Enter, Tab, Escape
+     * @param {KeyboardEvent} e - The keyboard event
+     * @returns {boolean} - True if event was handled, false otherwise
+     */
     const handleSuggestionNavigation = (e) => {
         const { visible, items, activeIndex } = appState.ui.formulaSuggestions;
         if (!visible || items.length === 0) return false;
@@ -1424,15 +1478,27 @@ document.addEventListener('DOMContentLoaded', () => {
         let newIndex = activeIndex;
 
         if (e.key === 'ArrowDown') {
+            e.preventDefault();
             newIndex = (activeIndex + 1) % items.length;
         } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
             newIndex = (activeIndex - 1 + items.length) % items.length;
         } else if (e.key === 'Enter' || e.key === 'Tab') {
             e.preventDefault();
             if (activeIndex > -1) {
                 insertSuggestion();
-            } else { // If no suggestion is active, let the main Enter handler do its job
-                return false; 
+            } else if (items.length === 1) {
+                // Auto-select if only one option
+                appState.ui.formulaSuggestions.activeIndex = 0;
+                insertSuggestion();
+            } else {
+                // Select first item by default
+                newIndex = 0;
+                appState.ui.formulaSuggestions.activeIndex = newIndex;
+                const suggestions = dom.formulaSuggestions.querySelectorAll('.suggestion-item');
+                suggestions[newIndex].classList.add('active');
+                // On second press, insert
+                return true;
             }
             return true;
         } else if (e.key === 'Escape') {
@@ -1443,50 +1509,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (newIndex !== activeIndex) {
             const suggestions = dom.formulaSuggestions.querySelectorAll('.suggestion-item');
-            if(activeIndex > -1) suggestions[activeIndex].classList.remove('active');
-            suggestions[newIndex].classList.add('active');
+            if(activeIndex > -1 && suggestions[activeIndex]) {
+                suggestions[activeIndex].classList.remove('active');
+            }
+            if(suggestions[newIndex]) {
+                suggestions[newIndex].classList.add('active');
+                // Scroll into view if needed
+                suggestions[newIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
             appState.ui.formulaSuggestions.activeIndex = newIndex;
         }
         return true;
     };
 
+    /**
+     * Insert selected suggestion into the cell
+     * Handles both function and column suggestions with proper cursor positioning
+     */
     const insertSuggestion = () => {
         const { items, activeIndex, targetCell } = appState.ui.formulaSuggestions;
         if (activeIndex < 0 || !targetCell) return;
 
         const selectedItem = items[activeIndex];
         const { textBefore } = getCaretPositionInfo(targetCell);
+        const currentText = targetCell.textContent;
         
         let textToInsert = '';
         let textToReplace = '';
+        let cursorOffset = 0;
 
         if (selectedItem.type === 'column') {
+            // Replace everything from [ to current position
             const openBracketIndex = textBefore.lastIndexOf('[');
             textToReplace = textBefore.substring(openBracketIndex);
             textToInsert = `[${selectedItem.name}]`;
-        } else { // function
-            const lastWordMatch = textBefore.match(/(\w+)$/);
-            textToReplace = lastWordMatch ? lastWordMatch[1] : '';
-            textToInsert = `${selectedItem.name}()`;
+            cursorOffset = 0; // Place cursor after ]
+        } else {
+            // Function suggestion
+            // If we're in an empty field or just typed '=', prepend '=' if needed
+            if (currentText.trim() === '') {
+                textToReplace = '';
+                textToInsert = `=${selectedItem.name}()`;
+                cursorOffset = -1; // Place cursor between ()
+            } else {
+                const lastWordMatch = textBefore.match(/(\w+)$/);
+                textToReplace = lastWordMatch ? lastWordMatch[1] : '';
+                textToInsert = `${selectedItem.name}()`;
+                cursorOffset = -1; // Place cursor between ()
+            }
         }
         
-        const currentText = targetCell.textContent;
         const textAfter = currentText.substring(textBefore.length);
+        const newText = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
         
-        targetCell.textContent = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
+        targetCell.textContent = newText;
 
         // Set cursor position
         const range = document.createRange();
         const sel = window.getSelection();
-        const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length - (selectedItem.type === 'function' ? 1 : 0);
-        if (targetCell.childNodes.length > 0) {
-            range.setStart(targetCell.childNodes[0], newCaretPos);
-            range.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(range);
+        const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length + cursorOffset;
+        
+        if (targetCell.childNodes.length > 0 && targetCell.childNodes[0].nodeType === Node.TEXT_NODE) {
+            try {
+                const textNode = targetCell.childNodes[0];
+                const safePos = Math.max(0, Math.min(newCaretPos, textNode.length));
+                range.setStart(textNode, safePos);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            } catch (e) {
+                console.error('Error setting cursor position:', e);
+            }
         }
 
-        hideSuggestions();
+        // Trigger update to show next suggestions if needed
+        setTimeout(() => {
+            updateFormulaSuggestions(targetCell);
+        }, 50);
     };
 
     // =========================================
@@ -1589,17 +1688,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(!READONLY_COLS.includes(k)) {
                         c.contentEditable=true;
                         c.dataset.header=k;
-                        c.addEventListener('keyup', (e) => {
-                            if (!['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                        
+                        // Show suggestions on focus if empty
+                        c.addEventListener('focus', () => {
+                            if (c.textContent.trim() === '') {
                                 updateFormulaSuggestions(c);
                             }
                         });
+                        
+                        // Handle character input and trigger keys
+                        c.addEventListener('input', (e) => {
+                            updateFormulaSuggestions(c);
+                        });
+                        
+                        c.addEventListener('keyup', (e) => {
+                            // Trigger suggestions on specific keys
+                            if (['=', '[', ']'].includes(e.key)) {
+                                updateFormulaSuggestions(c);
+                            } else if (!['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                                updateFormulaSuggestions(c);
+                            }
+                        });
+                        
                         c.addEventListener('keydown', (e) => {
+                            // Handle suggestion navigation first
                             if (handleSuggestionNavigation(e)) {
                                 e.stopImmediatePropagation();
                                 return;
                             }
                             
+                            // Handle Enter key for formula application or navigation
                             if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();
                                 const formula = c.textContent;
@@ -1613,6 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                         });
+                        
                         c.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
                     } else {
                         c.classList.add('readonly-col');
