@@ -31,7 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
             db: [],
             dbHeaders: [],
             currentMap: null,
-            analysisData: []
+            analysisData: [],
+            columnFormulas: {} 
         },
         ui: {
             language: 'en',
@@ -48,6 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
             canvasZoom: { scale: 1, offsetX: 0, offsetY: 0 },
             isZoomActive: false,
             currentMPView: null,
+            dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
+            dbDraggedColumnIndex: -1,
+            formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null }
         }
     };
 
@@ -118,15 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
         chartResetViewBtn: document.getElementById('chart-reset-view-btn'),
         btnResetView: document.getElementById('btn-reset-view'),
         minimapCanvas: document.getElementById('minimap-canvas'),
+        dbHeaderContextMenu: document.getElementById('db-header-context-menu'),
+        formulaSuggestions: document.getElementById('formula-suggestions'),
     };
 
     // =========================================
     // [SECTION] TRANSLATIONS & HELPERS
     // =========================================
     const translations = {
-        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Version', map: 'Schema', saveToCSV: 'Save & Export', schemaEditor: 'Schema Editor', addMP: 'Add New Point', saveMap: 'Save Map', saveChanges: 'Save Changes', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrowWidth: 'Arrow Width', arrowColor: 'Arrow Color', arrowHead: 'Arrow Head', selectMapPrompt: '⬅️ Select a schema to view points.', drawingBackground: 'Drawing', upload: 'Upload', noFileSelected: 'No file', schemaInfoMissing: "Please fill in Schema Name and Version first.", saveSuccess: "Saved!", saveAndExportSuccess: "Data saved! Visualization exported to project folder.", saveError: "Error: Could not save data.", exportSuccess: "PNG exported successfully!", exportError: "Error: Could not export PNG.", metaLabels: "Overlay Info", showQR: "Show QR", showDate: "Show Date", dbError: "Error: Could not display database.", deleteSchema: "Delete Schema", confirmDelete: "Are you sure you want to delete this schema? This action cannot be undone.", deleteSuccess: "Schema deleted successfully.", deleteError: "Error deleting schema.", confirmExitEditor: "You have unsaved changes. Are you sure you want to exit without saving?", filters: "Filters", dateFrom: "Date from", dateTo: "Date to", chartConfig: "Chart Configuration", chartType: "Chart Type", chartLine: "Line", chartBar: "Bar", measurePoints: "Measure Points", generateChart: "Generate Chart", searchByQRCode: "Search by QR Code...", analyzeSelected: "Analyze Selected", chartTitle: "Chart Title", axisXTitle: "X-Axis Title", axisYTitle: "Y-Axis Title", exportPNG: "Export PNG", exportCSV: "Export Data (CSV)", analysisMode: "Analysis Mode", modeTrend: "Trend (over time)", modeProfile: "Profile (single part)", selectRecord: "Select Record", selectRecords: "Select Record(s)", resetView: "Reset View", actions: "Actions", confirmDeleteRecord: "Are you sure you want to delete this record? This action cannot be undone.", comment: "Comment", mpType: "Point Type", typeSingle: "Single Value", typeTable: "Table (Multi-value)", columns: "Columns", addColumn: "Add Column", arrows: "Arrows", addArrow: "Add Arrow", setView: "Set View", clearView: "Clear View" },
-        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja', map: 'Schemat', saveToCSV: 'Zapisz i Eksportuj', schemaEditor: 'Edytor Schematu', addMP: 'Dodaj Nowy Punkt', saveMap: 'Zapisz Mapę', saveChanges: 'Zapisz Zmiany', name: 'Nazwa', unit: 'Jednostka', nominal: 'Nominał', min: 'Min', max: 'Max', arrowWidth: 'Grubość strzałki', arrowColor: 'Kolor strzałki', arrowHead: 'Grot strzałki', selectMapPrompt: '⬅️ Wybierz schemat, aby zobaczyć punkty.', drawingBackground: 'Rysunek techniczny', upload: 'Wgraj', noFileSelected: 'Brak pliku', schemaInfoMissing: "Najpierw wypełnij Nazwę Schematu i Wersję.", saveSuccess: "Zapisano!", saveAndExportSuccess: "Dane zapisane! Wizualizacja wyeksportowana do folderu projektu.", saveError: "Błąd: Nie udało się zapisać danych.", exportSuccess: "PNG wyeksportowany pomyślnie!", exportError: "Błąd: Nie udało się wyeksportować PNG.", metaLabels: "Nakładka Info", showQR: "Pokaż QR", showDate: "Pokaż Datę", dbError: "Błąd: Nie można wyświetlić bazy danych.", deleteSchema: "Usuń Schemat", confirmDelete: "Czy na pewno chcesz usunąć ten schemat? Tej akcji nie można cofnąć.", deleteSuccess: "Schemat usunięty pomyślnie.", deleteError: "Błąd podczas usuwania schematu.", confirmExitEditor: "Masz niezapisane zmiany. Czy na pewno chcesz wyjść bez zapisywania?", filters: "Filtry", dateFrom: "Data od", dateTo: "Data do", chartConfig: "Konfiguracja Wykresu", chartType: "Typ Wykresu", chartLine: "Liniowy", chartBar: "Słupkowy", measurePoints: "Punkty Pomiarowe", generateChart: "Generuj Wykres", searchByQRCode: "Szukaj po kodzie QR...", analyzeSelected: "Analizuj zaznaczone", chartTitle: "Tytuł Wykresu", axisXTitle: "Tytuł osi X", axisYTitle: "Tytuł osi Y", exportPNG: "Eksportuj PNG", exportCSV: "Eksportuj dane (CSV)", analysisMode: "Tryb Analizy", modeTrend: "Trend (w czasie)", modeProfile: "Profil (pojedyncza szyna)", selectRecord: "Wybierz Zapis", selectRecords: "Wybierz Zapis(y)", resetView: "Resetuj widok", actions: "Akcje", confirmDeleteRecord: "Czy na pewno chcesz usunąć ten rekord? Tej akcji nie można cofnąć.", comment: "Komentarz", mpType: "Typ Punktu", typeSingle: "Pojedynczy", typeTable: "Tabela (Wiele wartości)", columns: "Kolumny", addColumn: "Dodaj Kolumnę", arrows: "Strzałki", addArrow: "Dodaj Strzałkę", setView: "Zapisz Widok", clearView: "Usuń Widok" },
-        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Version', map: 'Schema', saveToCSV: 'Speichern & Export', schemaEditor: 'Schema-Editor', addMP: 'Neuen Punkt hinzufügen', saveMap: 'Karte speichern', saveChanges: 'Änderungen speichern', name: 'Name', unit: 'Einheit', nominal: 'Nennwert', min: 'Min', max: 'Max', arrowWidth: 'Pfeilbreite', arrowColor: 'Pfeilfarbe', arrowHead: 'Pfeilspitze', selectMapPrompt: '⬅️ Schema auswählen, um Punkte anzuzeigen.', drawingBackground: 'Zeichnung', upload: 'Hochladen', noFileSelected: 'Keine Datei', schemaInfoMissing: "Bitte füllen Sie zuerst Schemaname und Version aus.", saveSuccess: "Gespeichert!", saveAndExportSuccess: "Daten gespeichert! Visualisierung in den Projektordner exportiert.", saveError: "Fehler: Daten konnten nicht gespeichert werden.", exportSuccess: "PNG erfolgreich exportiert!", exportError: "Fehler: PNG konnte nicht exportiert werden.", metaLabels: "Overlay-Info", showQR: "QR anzeigen", showDate: "Datum anzeigen", dbError: "Fehler: Datenbank konnte nicht angezeigt werden.", deleteSchema: "Schema löschen", confirmDelete: "Möchten Sie dieses Schema wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.", deleteSuccess: "Schema erfolgreich gelöscht.", deleteError: "Fehler beim Löschen des Schemas.", confirmExitEditor: "Sie haben ungespeicherte Änderungen. Möchten Sie wirklich ohne Speichern beenden?", filters: "Filter", dateFrom: "Datum von", dateTo: "Datum bis", chartConfig: "Diagrammkonfiguration", chartType: "Diagrammtyp", chartLine: "Linie", chartBar: "Balken", measurePoints: "Messpunkte", generateChart: "Diagramm erstellen", searchByQRCode: "Suche nach QR-Code...", analyzeSelected: "Ausgewählte analysieren", chartTitle: "Diagrammtitel", axisXTitle: "X-Achsen-Titel", axisYTitle: "Y-Achsen-Titel", exportPNG: "PNG exportieren", exportCSV: "Daten exportieren (CSV)", analysisMode: "Analysemodus", modeTrend: "Trend (über Zeit)", modeProfile: "Profil (einzelnes Teil)", selectRecord: "Datensatz auswählen", selectRecords: "Datensatz/Datensätze auswählen", resetView: "Ansicht zurücksetzen", actions: "Aktionen", confirmDeleteRecord: "Möchten Sie diesen Datensatz wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.", comment: "Kommentar", mpType: "Punkttyp", typeSingle: "Einzelwert", typeTable: "Tabelle (Mehrfachwert)", columns: "Spalten", addColumn: "Spalte hinzufügen", arrows: "Pfeile", addArrow: "Pfeil hinzufügen", setView: "Ansicht speichern", clearView: "Ansicht löschen" }
+        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Version', drawingBackground: 'Drawing Background', upload: 'Upload', metaLabels: 'Meta Labels', showQR: 'Show QR', showDate: 'Show Date', addMeasurePoint: 'Add Measure Point', saveSchema: 'Save Schema', comment: 'Comment', saveAndExport: 'Save & Export', columns: 'Columns', addColumn: 'Add Column', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Arrows', addArrow: 'Add Arrow', arrowWidth: 'Width', arrowColor: 'Color', arrowHead: 'Head', setView: 'Set View', clearView: 'Clear View', confirmExitEditor: 'You have unsaved changes. Are you sure you want to exit?', schemaInfoMissing: 'Schema name and version are required.', deleteSuccess: 'Deleted successfully', deleteError: 'Error deleting file', saveSuccess: 'Saved successfully!', saveError: 'Error saving file', exportSuccess: 'Export successful!', confirmDelete: 'Are you sure you want to delete this schema?', confirmDeleteRecord: 'Are you sure you want to delete this record?', selectMapPrompt: 'Select a schema to begin.', map: 'Schema', actions: 'Actions', searchByQRCode: 'Search by QR code...' },
+        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja', drawingBackground: 'Rysunek Tła', upload: 'Wgraj', metaLabels: 'Etykiety Meta', showQR: 'Pokaż QR', showDate: 'Pokaż Datę', addMeasurePoint: 'Dodaj Punkt Pom.', saveSchema: 'Zapisz Schemat', comment: 'Komentarz', saveAndExport: 'Zapisz i Eksportuj', columns: 'Kolumny', addColumn: 'Dodaj Kolumnę', name: 'Nazwa', unit: 'Jedn.', nominal: 'Nominał', min: 'Min', max: 'Max', arrows: 'Strzałki', addArrow: 'Dodaj Strzałkę', arrowWidth: 'Grubość', arrowColor: 'Kolor', arrowHead: 'Grot', setView: 'Ustaw Widok', clearView: 'Wyczyść Widok', confirmExitEditor: 'Masz niezapisane zmiany. Czy na pewno chcesz wyjść?', schemaInfoMissing: 'Nazwa i wersja schematu są wymagane.', deleteSuccess: 'Usunięto pomyślnie', deleteError: 'Błąd podczas usuwania', saveSuccess: 'Zapisano pomyślnie!', saveError: 'Błąd zapisu', exportSuccess: 'Eksport udany!', confirmDelete: 'Czy na pewno usunąć ten schemat?', confirmDeleteRecord: 'Czy na pewno usunąć ten rekord?', selectMapPrompt: 'Wybierz schemat, aby rozpocząć.', map: 'Schemat', actions: 'Akcje', searchByQRCode: 'Szukaj po kodzie QR...' },
+        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Version', drawingBackground: 'Zeichnungshintergrund', upload: 'Hochladen', metaLabels: 'Meta-Labels', showQR: 'QR anzeigen', showDate: 'Datum anzeigen', addMeasurePoint: 'Messpunkt hinzufügen', saveSchema: 'Schema speichern', comment: 'Kommentar', saveAndExport: 'Speichern & Export', columns: 'Spalten', addColumn: 'Spalte hinzufügen', name: 'Name', unit: 'Einheit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Pfeile', addArrow: 'Pfeil hinzufügen', arrowWidth: 'Breite', arrowColor: 'Farbe', arrowHead: 'Pfeilspitze', setView: 'Ansicht festlegen', clearView: 'Ansicht löschen', confirmExitEditor: 'Sie haben ungespeicherte Änderungen. Wollen Sie wirklich schließen?', schemaInfoMissing: 'Schemaname und Version sind erforderlich.', deleteSuccess: 'Erfolgreich gelöscht', deleteError: 'Fehler beim Löschen', saveSuccess: 'Erfolgreich gespeichert!', saveError: 'Fehler beim Speichern', exportSuccess: 'Export erfolgreich!', confirmDelete: 'Möchten Sie dieses Schema wirklich löschen?', confirmDeleteRecord: 'Möchten Sie diesen Datensatz wirklich löschen?', selectMapPrompt: 'Wählen Sie ein Schema, um zu beginnen.', map: 'Schema', actions: 'Aktionen', searchByQRCode: 'Suche nach QR-Code...' },
     };
     const t = (key) => translations[appState.ui.language]?.[key] || key;
     const formatNumber = (num, digits = 3) => {
@@ -835,11 +841,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const isExistingSchema = !!editorData.originalFileName;
         contentDiv.innerHTML = `
             <div id="editor-schema-controls">
-                <div class="input-group"><label data-i18n="schemaName">${t('schemaName')}</label><input type="text" id="editor-schema-name" class="input-field" value="${editorData.name || ''}" ${isExistingSchema ? 'readonly' : ''}></div>
+                <div class="input-group"><label data-i18n="schemaName">${t('schemaName')}</label><input type="text" id="editor-schema-name" class="input-field" value="${editorData.name || ''}" ${isExistingSchema ? 'disabled' : ''}></div>
                 <div class="input-group"><label data-i18n="schemaVersion">${t('schemaVersion')}</label><input type="text" id="editor-schema-version" class="input-field" value="${editorData.version || ''}"></div>
             </div>
             ${isExistingSchema ? `<button id="editor-delete-schema-btn" class="btn" title="${t('deleteSchema')}">🗑️</button>` : ''}
-            <div id="editor-bg-control"><div class="input-group"><label><span data-i18n="drawingBackground">${t('drawingBackground')}</span></label><span id="editor-bg-filename">${editorData.meta.backgroundFile || t('noFileSelected')}</span><button id="btn-editor-upload-bg" class="btn btn-secondary"><span data-i18n="upload">${t('upload')}</span></button></div></div>
+            <div id="editor-bg-control"><div class="input-group"><label><span data-i18n="drawingBackground">${t('drawingBackground')}</span></label><span id="editor-bg-filename">${editorData.meta?.backgroundFile || '...'}</span><button id="btn-editor-upload-bg" class="btn btn-secondary">${t('upload')}</button></div></div>
             <div id="editor-meta-control">
                 <label><span data-i18n="metaLabels">${t('metaLabels')}</span></label>
                 <div class="checkbox-group"><label><input type="checkbox" id="check-show-qr" ${editorData.meta.showQR ? 'checked' : ''}> <span data-i18n="showQR">${t('showQR')}</span></label><label><input type="checkbox" id="check-show-date" ${editorData.meta.showDate ? 'checked' : ''}> <span data-i18n="showDate">${t('showDate')}</span></label></div>
@@ -849,8 +855,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if(isExistingSchema) contentDiv.querySelector('#editor-delete-schema-btn').addEventListener('click', handleDeleteSchema);
         contentDiv.querySelector('#editor-schema-name').addEventListener('input', (e) => { editorData.name = e.target.value; appState.ui.editorIsDirty = true; });
         contentDiv.querySelector('#editor-schema-version').addEventListener('input', (e) => { editorData.version = e.target.value; appState.ui.editorIsDirty = true; });
-        contentDiv.querySelector('#check-show-qr').addEventListener('change', (e) => { editorData.meta.showQR = e.target.checked; if(e.target.checked && !editorData.meta.qrLabelPos) editorData.meta.qrLabelPos = {x:100, y:50}; appState.ui.editorIsDirty = true; renderCanvas(); });
-        contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos = {x:100, y:80}; appState.ui.editorIsDirty = true; renderCanvas(); });
+        contentDiv.querySelector('#check-show-qr').addEventListener('change', (e) => { editorData.meta.showQR = e.target.checked; if(e.target.checked && !editorData.meta.qrLabelPos) editorData.meta.qrLabelPos = {x: 100, y: 50}; appState.ui.editorIsDirty = true; renderCanvas(); });
+        contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos = {x: 100, y: 80}; appState.ui.editorIsDirty = true; renderCanvas(); });
         contentDiv.querySelector('#btn-editor-upload-bg').addEventListener('click', () => dom.backgroundUploader.click());
         const container = contentDiv.querySelector('#editor-properties-container');
         editorData.points.forEach(mp => renderMPCard(mp, container));
@@ -892,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          <div class="editor-point-header"><span>Arrow ${i+1}</span><button class="editor-icon-btn delete" data-action="delete-arrow">🗑️</button></div>
                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                             <div class="input-group"><label>${t('arrowWidth')}</label><input type="number" class="input-field" data-prop="arrows.${i}.style.width" value="${arrow.style?.width || 2}"></div>
-                            <div class="input-group"><label>${t('arrowColor')}</label><input type="color" class="input-field" data-prop="arrows.${i}.style.color" value="${arrow.style?.color || '#007aff'}"></div>
+                            <div class="input-group"><label>${t('arrowColor')}</label><input type="color" class="input-field" data-prop="arrows.${i}.style.color" value="${arrow.style?.color || '#ff9500'}"></div>
                         </div>
                         <div class="input-group"><label>${t('arrowHead')}</label>
                             <select class="select-field" data-prop="arrows.${i}.style.head">
@@ -911,7 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="btn btn-secondary" data-action="clear-view">${mp.view ? t('clearView') : t('clearView')}</button>
             </div>`;
 
-        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('mpType')}</label><select class="select-field" data-prop="type"><option value="single" ${mp.type !== 'table' ? 'selected' : ''}>${t('typeSingle')}</option><option value="table" ${mp.type === 'table' ? 'selected' : ''}>${t('typeTable')}</option></select></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name}"></div>${typeHtml}${arrowsHtml}${viewControlsHtml}`;
+        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><select class="select-field" data-prop="type" style="height:32px; padding: 4px 8px;"><option value="single" ${mp.type==='single'?'selected':''}>Single</option><option value="table" ${mp.type==='table'?'selected':''}>Table</option></select><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name || ''}"></div>${typeHtml}${arrowsHtml}${viewControlsHtml}`;
         container.appendChild(card);
 
         card.querySelector('.editor-point-id-input').addEventListener('change', (e) => {
@@ -1021,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!appState.ui.isEditorOpen) return;
         const points = appState.ui.editorState.points;
         const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, '')) || 0)) + 1)}`;
-        points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: {color: "#ff9500", width: 2, head: "arrow"}}], view: null });
+        points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: {width: 2, color: '#ff9500', head: 'arrow'}}]});
         appState.ui.editorIsDirty = true;
         renderSchemaInspector();
         selectMP(newId);
@@ -1159,7 +1165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0, nw, nh);
                 URL.revokeObjectURL(bgUrl);
                 const cRec = recordData;
-                const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${cMap.points.find(p=>p.id===mpId).columns.findIndex(c=>c.name===colName)}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value);
+                const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${cRec.columns.findIndex(c=>c.name===colName)}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value || '');
                 cMap.points.forEach(mp => {
                     (mp.arrows||[{x1:mp.x1,y1:mp.y1,x2:mp.x2,y2:mp.y2,style:mp.style}]).forEach(a => {
                         if(!a.x1) return;
@@ -1287,6 +1293,203 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================
+    // [SECTION] FORMULA ENGINE
+    // =========================================
+    const evaluateFormula = (formula, rowData) => {
+        if (!formula.startsWith('=')) return formula;
+
+        let expression = formula.substring(1).trim();
+
+        expression = expression.replace(/\[(.*?)\]/g, (match, colName) => {
+            const val = rowData[colName.trim()];
+            const num = parseFloat(val?.replace(',', '.'));
+            return isNaN(num) ? `"${val}"` : num;
+        });
+        
+        const functionCalls = expression.match(/[a-zA-Z_]+\(/g) || [];
+        const allowedFunctions = ['SQRT', 'POW', 'ABS', 'ROUND', 'SIN', 'COS', 'TAN', 'CONCAT', 'IF'];
+        
+        const isSafe = functionCalls.every(call => allowedFunctions.includes(call.slice(0, -1).toUpperCase()));
+        if (!isSafe) {
+             console.error("Unsafe function in formula:", expression);
+             return "#ERROR!";
+        }
+
+        try {
+            const evaluator = new Function('SQRT', 'POW', 'ABS', 'ROUND', 'SIN', 'COS', 'TAN', 'CONCAT', 'IF', `return ${expression}`);
+            const result = evaluator(Math.sqrt, Math.pow, Math.abs, Math.round, Math.sin, Math.cos, Math.tan, (...args) => args.join(''), (cond, t, f) => cond ? t : f);
+            return result;
+        } catch (e) {
+            console.error("Formula evaluation error:", e);
+            return '#ERROR!';
+        }
+    };
+
+    // =========================================
+    // [SECTION] FORMULA SUGGESTIONS
+    // =========================================
+    const AVAILABLE_FUNCTIONS = [
+        { name: 'SQRT', description: 'Calculates the square root.' },
+        { name: 'POW', description: 'Raises a number to a power.' },
+        { name: 'ABS', description: 'Returns the absolute value.' },
+        { name: 'ROUND', description: 'Rounds a number.' },
+        { name: 'SIN', description: 'Calculates the sine.' },
+        { name: 'COS', description: 'Calculates the cosine.' },
+        { name: 'TAN', description: 'Calculates the tangent.' },
+        { name: 'IF', description: 'Conditional statement.' },
+        { name: 'CONCAT', description: 'Joins strings together.' },
+    ];
+
+    const getCaretPositionInfo = (element) => {
+        const selection = window.getSelection();
+        if (selection.rangeCount === 0) return { position: 0, textBefore: '' };
+        
+        const range = selection.getRangeAt(0);
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(element);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        
+        const position = preCaretRange.toString().length;
+        const textBefore = element.textContent.substring(0, position);
+        
+        return { position, textBefore };
+    };
+
+    const updateFormulaSuggestions = (cell) => {
+        const { textBefore } = getCaretPositionInfo(cell);
+        const formula = cell.textContent;
+
+        if (!formula.startsWith('=')) {
+            hideSuggestions();
+            return;
+        }
+
+        const openBracketIndex = textBefore.lastIndexOf('[');
+        const closeBracketIndex = textBefore.lastIndexOf(']');
+        
+        if (openBracketIndex > closeBracketIndex) { // Inside a column tag
+            const filter = textBefore.substring(openBracketIndex + 1);
+            const suggestions = appState.data.dbHeaders
+                .filter(h => !READONLY_COLS.includes(h) && h.toLowerCase().includes(filter.toLowerCase()))
+                .map(h => ({ name: h, type: 'column' }));
+            showSuggestions(suggestions, cell);
+        } else { // Outside a column tag, suggest functions
+            const lastWordMatch = textBefore.match(/(\w+)$/);
+            const filter = lastWordMatch ? lastWordMatch[1] : '';
+            const suggestions = AVAILABLE_FUNCTIONS
+                .filter(f => f.name.toLowerCase().startsWith(filter.toLowerCase()))
+                .map(f => ({ ...f, type: 'function' }));
+            showSuggestions(suggestions, cell);
+        }
+    };
+    
+    const showSuggestions = (items, cell) => {
+        const popup = dom.formulaSuggestions;
+        appState.ui.formulaSuggestions.items = items;
+        appState.ui.formulaSuggestions.activeIndex = -1;
+        appState.ui.formulaSuggestions.targetCell = cell;
+
+        if (items.length === 0) {
+            hideSuggestions();
+            return;
+        }
+
+        popup.innerHTML = items.map(item => `
+            <div class="suggestion-item" data-value="${item.name}">
+                <span class="suggestion-name">${item.name}</span>
+                ${item.description ? `<span class="suggestion-desc">${item.description}</span>` : ''}
+            </div>
+        `).join('');
+
+        const cellRect = cell.getBoundingClientRect();
+        const scrollContainer = dom.dbTable.parentElement; // The scrolling container
+
+        popup.style.display = 'block';
+        popup.style.left = `${cellRect.left + scrollContainer.scrollLeft}px`;
+        popup.style.top = `${cellRect.bottom + scrollContainer.scrollTop - 2}px`;
+        appState.ui.formulaSuggestions.visible = true;
+    };
+
+    const hideSuggestions = () => {
+        dom.formulaSuggestions.style.display = 'none';
+        appState.ui.formulaSuggestions.visible = false;
+        appState.ui.formulaSuggestions.items = [];
+        appState.ui.formulaSuggestions.activeIndex = -1;
+    };
+
+    const handleSuggestionNavigation = (e) => {
+        const { visible, items, activeIndex } = appState.ui.formulaSuggestions;
+        if (!visible || items.length === 0) return false;
+
+        let newIndex = activeIndex;
+
+        if (e.key === 'ArrowDown') {
+            newIndex = (activeIndex + 1) % items.length;
+        } else if (e.key === 'ArrowUp') {
+            newIndex = (activeIndex - 1 + items.length) % items.length;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            if (activeIndex > -1) {
+                insertSuggestion();
+            } else { // If no suggestion is active, let the main Enter handler do its job
+                return false; 
+            }
+            return true;
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            hideSuggestions();
+            return true;
+        }
+
+        if (newIndex !== activeIndex) {
+            const suggestions = dom.formulaSuggestions.querySelectorAll('.suggestion-item');
+            if(activeIndex > -1) suggestions[activeIndex].classList.remove('active');
+            suggestions[newIndex].classList.add('active');
+            appState.ui.formulaSuggestions.activeIndex = newIndex;
+        }
+        return true;
+    };
+
+    const insertSuggestion = () => {
+        const { items, activeIndex, targetCell } = appState.ui.formulaSuggestions;
+        if (activeIndex < 0 || !targetCell) return;
+
+        const selectedItem = items[activeIndex];
+        const { textBefore } = getCaretPositionInfo(targetCell);
+        
+        let textToInsert = '';
+        let textToReplace = '';
+
+        if (selectedItem.type === 'column') {
+            const openBracketIndex = textBefore.lastIndexOf('[');
+            textToReplace = textBefore.substring(openBracketIndex);
+            textToInsert = `[${selectedItem.name}]`;
+        } else { // function
+            const lastWordMatch = textBefore.match(/(\w+)$/);
+            textToReplace = lastWordMatch ? lastWordMatch[1] : '';
+            textToInsert = `${selectedItem.name}()`;
+        }
+        
+        const currentText = targetCell.textContent;
+        const textAfter = currentText.substring(textBefore.length);
+        
+        targetCell.textContent = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
+
+        // Set cursor position
+        const range = document.createRange();
+        const sel = window.getSelection();
+        const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length - (selectedItem.type === 'function' ? 1 : 0);
+        if (targetCell.childNodes.length > 0) {
+            range.setStart(targetCell.childNodes[0], newCaretPos);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        hideSuggestions();
+    };
+
+    // =========================================
     // [SECTION] DB & ANALYSIS
     // =========================================
     const parseCSV = (text) => {
@@ -1310,47 +1513,227 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.dbViewerModal.classList.toggle('open', open);
         if (open) {
             renderDbViewer();
+        } else {
+            hideSuggestions();
         }
     };
-
+    
+    // --- DB Viewer Rendering and Interactions ---
     const renderDbViewer = () => {
-        const tEl = dom.dbTable;
-        tEl.innerHTML = '';
-        if (appState.data.db.length === 0) return;
-        const h = [...appState.data.dbHeaders, t('actions')], thead = tEl.createTHead().insertRow();
-        h.forEach(txt => {
-            const th = document.createElement('th');
-            th.textContent = txt;
-            thead.appendChild(th);
-        });
-        const tbody = tEl.createTBody();
-        appState.data.db.slice().sort((a,b)=>new Date(b.Timestamp)-new Date(a.Timestamp)).forEach(r => {
+        const tableEl = dom.dbTable;
+        tableEl.innerHTML = '';
+        
+        // --- Render Header ---
+        const thead = tableEl.createTHead();
+        const headerRow = thead.insertRow();
+        if (appState.data.dbHeaders) {
+            appState.data.dbHeaders.forEach((headerText, index) => {
+                const th = document.createElement('th');
+                th.textContent = headerText;
+                th.dataset.columnIndex = index;
+
+                const isReadOnly = READONLY_COLS.includes(headerText);
+                if (!isReadOnly) {
+                    th.classList.add('draggable');
+                    th.draggable = true;
+                    th.addEventListener('dragstart', handleDbColumnDragStart);
+                    th.addEventListener('dragenter', (e) => e.preventDefault());
+                    th.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        document.querySelectorAll('th.drag-over').forEach(t => t.classList.remove('drag-over'));
+                        th.classList.add('drag-over');
+                    });
+                    th.addEventListener('dragleave', () => th.classList.remove('drag-over'));
+                    th.addEventListener('drop', handleDbColumnDrop);
+                    th.addEventListener('dragend', () => th.classList.remove('dragging'));
+                    th.addEventListener('contextmenu', (e) => showDbHeaderContextMenu(e, headerText));
+                }
+                if (appState.data.columnFormulas[headerText]) {
+                    th.innerHTML += ' <span class="fx-icon">fx</span>';
+                }
+                headerRow.appendChild(th);
+            });
+        }
+
+        const actionsTh = document.createElement('th');
+        actionsTh.textContent = t('actions');
+        headerRow.appendChild(actionsTh);
+        
+        const addColTh = document.createElement('th');
+        addColTh.style.textAlign = 'center';
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+';
+        addBtn.className = 'btn btn-secondary';
+        addBtn.style.height = '24px';
+        addBtn.style.padding = '0 8px';
+        addBtn.addEventListener('click', addNewDbColumn);
+        addColTh.appendChild(addBtn);
+        headerRow.appendChild(addColTh);
+
+        // --- Render Body ---
+        const tbody = tableEl.createTBody();
+        const filteredData = appState.data.db.slice().sort((a,b)=>new Date(b.Timestamp)-new Date(a.Timestamp));
+        
+        filteredData.forEach((r, rowIndex) => {
             const row = tbody.insertRow();
             row.dataset.recordId = r.RecordId;
-            appState.data.dbHeaders.forEach(k => {
-                const c = row.insertCell();
-                c.textContent = r[k]||'';
-                if(!READONLY_COLS.includes(k)) {
-                    c.contentEditable=true;
-                    c.dataset.header=k;
-                } else c.className='readonly-col';
-                if(k==='QRCode') c.dataset.qrCodeForSearch=(r[k]||'').toLowerCase();
-            });
+            
+            if (appState.data.dbHeaders) {
+                appState.data.dbHeaders.forEach((k, colIndex) => {
+                    const c = row.insertCell();
+                    const cellValue = r[k] || '';
+                    c.textContent = cellValue;
+                    
+                    if (cellValue === '#ERROR!') c.classList.add('formula-error');
+
+                    if(!READONLY_COLS.includes(k)) {
+                        c.contentEditable=true;
+                        c.dataset.header=k;
+                        c.addEventListener('keyup', (e) => {
+                            if (!['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                                updateFormulaSuggestions(c);
+                            }
+                        });
+                        c.addEventListener('keydown', (e) => {
+                            if (handleSuggestionNavigation(e)) {
+                                e.stopImmediatePropagation();
+                                return;
+                            }
+                            
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                const formula = c.textContent;
+                                if (formula.startsWith('=')) {
+                                    applyFormulaToColumn(k, formula);
+                                } else {
+                                    const nextRow = row.parentElement.rows[rowIndex + 1];
+                                    if (nextRow) {
+                                        nextRow.cells[colIndex]?.focus();
+                                    }
+                                }
+                            }
+                        });
+                        c.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
+                    } else {
+                        c.classList.add('readonly-col');
+                    }
+                    if(k==='QRCode') c.dataset.qrCodeForSearch=(r[k]||'').toLowerCase();
+                });
+            }
             row.insertCell().className='db-table-actions-cell';
             row.lastElementChild.innerHTML = `<button class="db-export-btn" title="${t('exportPNG')}">📷</button><button class="db-delete-btn" title="${t('deleteSchema')}">🗑️</button>`;
         });
     };
-   
+
+    const handleDbColumnDragStart = (e) => {
+        appState.ui.dbDraggedColumnIndex = parseInt(e.target.dataset.columnIndex);
+        e.target.classList.add('dragging');
+    };
+    
+    const handleDbColumnDrop = (e) => {
+        e.preventDefault();
+        const fromIndex = appState.ui.dbDraggedColumnIndex;
+        const toTh = e.target.closest('th.draggable');
+        if (!toTh) return;
+        const toIndex = parseInt(toTh.dataset.columnIndex);
+
+        document.querySelectorAll('th.drag-over').forEach(th => th.classList.remove('drag-over'));
+        
+        if (fromIndex !== toIndex) {
+            const headers = appState.data.dbHeaders;
+            const [movedHeader] = headers.splice(fromIndex, 1);
+            headers.splice(toIndex, 0, movedHeader);
+            renderDbViewer();
+        }
+    };
+    
+    const showDbHeaderContextMenu = (e, headerText) => {
+        e.preventDefault();
+        hideSuggestions(); // Hide formula suggestions if open
+        const menu = dom.dbHeaderContextMenu;
+        menu.style.display = 'block';
+        menu.style.left = `${e.pageX}px`;
+        menu.style.top = `${e.pageY}px`;
+        
+        appState.ui.dbHeaderContextMenu = { visible: true, target: headerText, x: e.pageX, y: e.pageY };
+        
+        const deleteItem = menu.querySelector('[data-action="delete"]');
+        deleteItem.classList.toggle('disabled', READONLY_COLS.includes(headerText));
+    };
+
+    const hideDbHeaderContextMenu = () => {
+        dom.dbHeaderContextMenu.style.display = 'none';
+        appState.ui.dbHeaderContextMenu.visible = false;
+    };
+
+    const addNewDbColumn = () => {
+        const colName = prompt("Enter new column name:");
+        if (colName && !appState.data.dbHeaders.includes(colName)) {
+            appState.data.dbHeaders.push(colName);
+            appState.data.db.forEach(row => row[colName] = '');
+            renderDbViewer();
+        } else if (colName) {
+            alert("Column name already exists.");
+        }
+    };
+
+    const renameDbColumn = (oldName, newName) => {
+        const index = appState.data.dbHeaders.indexOf(oldName);
+        if (index > -1 && newName && !appState.data.dbHeaders.includes(newName)) {
+            appState.data.dbHeaders[index] = newName;
+            appState.data.db.forEach(row => {
+                row[newName] = row[oldName];
+                delete row[oldName];
+            });
+            if (appState.data.columnFormulas[oldName]) {
+                appState.data.columnFormulas[newName] = appState.data.columnFormulas[oldName];
+                delete appState.data.columnFormulas[oldName];
+            }
+            renderDbViewer();
+        } else if (newName) {
+            alert("New column name is invalid or already exists.");
+        }
+    };
+
+    const deleteDbColumn = (colName) => {
+        if (READONLY_COLS.includes(colName)) return;
+        if (confirm(`Are you sure you want to delete the column "${colName}" and all its data?`)) {
+            appState.data.dbHeaders = appState.data.dbHeaders.filter(h => h !== colName);
+            appState.data.db.forEach(row => delete row[colName]);
+            delete appState.data.columnFormulas[colName];
+            renderDbViewer();
+        }
+    };
+    
+    const applyFormulaToColumn = (colName, formula) => {
+        if (formula.trim() === '=' || formula.trim() === '') {
+            delete appState.data.columnFormulas[colName];
+        } else {
+            appState.data.columnFormulas[colName] = formula;
+        }
+        
+        appState.data.db.forEach(row => {
+            row[colName] = evaluateFormula(formula, row);
+        });
+        renderDbViewer();
+    };
+
     const saveDbChanges = async () => {
         try {
             dom.dbTable.querySelectorAll('td[contenteditable]').forEach(c => {
                 const r = appState.data.db.find(rec => rec.RecordId === c.closest('tr').dataset.recordId);
                 if(r) r[c.dataset.header] = c.textContent;
             });
+            for (const [colName, formula] of Object.entries(appState.data.columnFormulas)) {
+                 appState.data.db.forEach(row => {
+                    row[colName] = evaluateFormula(formula, row);
+                });
+            }
+
             await writeFile(appState.fileHandles.db, serializeCSV(appState.data.dbHeaders, appState.data.db));
             alert(t('saveSuccess'));
-            toggleDbViewer(false);
         } catch(e) {
+            console.error(e);
             alert(t('saveError'));
         }
     };
@@ -1389,7 +1772,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
    
     const filterAnalysisData = () => {
-        const df = dom.analysisDateFrom.valueAsDate, dt = dom.analysisDateTo.valueAsDate, qr = dom.analysisQrSearch.value.toLowerCase(), schemas = [...dom.analysisSchemasList.querySelectorAll('input:checked')].map(e=>e.value);
+        const df = dom.analysisDateFrom.valueAsDate, dt = dom.analysisDateTo.valueAsDate, qr = dom.analysisQrSearch.value.toLowerCase(), schemas = [...dom.analysisSchemasList.querySelectorAll('input:checked')].map(el => el.value);
         appState.data.analysisData = appState.data.db.filter(r => {
             const rd = new Date(r.Timestamp);
             return (!df || rd >= df) && (!dt || rd < new Date(dt.getTime() + 86400000)) && (!qr || r.QRCode.toLowerCase().includes(qr)) && schemas.includes(r.SchemaName);
@@ -1400,7 +1783,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const h = appState.data.analysisData.reduce((acc, r) => new Set([...acc, ...Object.keys(r)]), new Set());
         dom.analysisMpsList.innerHTML = [...h].filter(k => k.endsWith('_Value')).sort().map(k => {
             const mp = k.replace('_Value','');
-            return `<div class="mp-selection-item"><label><input type="checkbox" name="mp" value="${mp}" checked data-mp="${mp}"> ${mp}</label><input type="checkbox" class="mp-tolerance-toggle" data-mp="${mp}" title="Show Tolerances"></div>`;
+            return `<div class="mp-selection-item"><label><input type="checkbox" name="mp" value="${mp}" checked data-mp="${mp}"> ${mp}</label><input type="checkbox" class="mp-tolerance-toggle" data-mp-tol="${mp}" title="Show Tolerance"></div>`;
         }).join('');
         dom.analysisMpsList.querySelectorAll('input').forEach(el => el.addEventListener('change', generateChart));
     };
@@ -1427,7 +1810,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mode === 'trend') {
             data = appState.data.analysisData.filter(r => !appState.ui.hiddenRecordIds.has(r.RecordId));
             labels = data.map(r => r.QRCode);
-            const mps = [...dom.analysisMpsList.querySelectorAll('input[name="mp"]:checked')].map(e=>e.value), tols = [...dom.analysisMpsList.querySelectorAll('.mp-tolerance-toggle:checked')].map(e=>e.dataset.mp);
+            const mps = [...dom.analysisMpsList.querySelectorAll('input[name="mp"]:checked')].map(e=>e.value), tols = [...dom.analysisMpsList.querySelectorAll('.mp-tolerance-toggle:checked')].map(e=>e.dataset.mpTol);
             mps.forEach((mp,i) => {
                 const col = ['#007aff','#ff9500','#34c759'][i%3];
                 datasets.push({
@@ -1618,7 +2001,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.closest('.db-delete-btn')) {
             if (confirm(t('confirmDeleteRecord'))) {
                 appState.data.db = appState.data.db.filter(r => r.RecordId !== rid);
-                await saveDbChanges();
                 renderDbViewer();
             }
         } else if (e.target.closest('.db-export-btn')) {
@@ -1631,6 +2013,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Export failed");
                 }
             }
+        }
+    });
+
+    // --- Context Menu and Suggestions Logic ---
+    dom.dbHeaderContextMenu.addEventListener('click', (e) => {
+        const action = e.target.dataset.action;
+        const targetHeader = appState.ui.dbHeaderContextMenu.target;
+        if (!action || !targetHeader || e.target.classList.contains('disabled')) return;
+
+        if (action === 'rename') {
+            const newName = prompt(`Enter new name for "${targetHeader}":`, targetHeader);
+            if (newName) renameDbColumn(targetHeader, newName);
+        } else if (action === 'delete') {
+            deleteDbColumn(targetHeader);
+        } else if (action === 'formula') {
+            const formula = prompt(`Enter formula for column "${targetHeader}":\n(e.g., =[Col1] + [Col2])`, appState.data.columnFormulas[targetHeader] || '=');
+            if (formula !== null) applyFormulaToColumn(targetHeader, formula);
+        }
+        hideDbHeaderContextMenu();
+    });
+
+    dom.formulaSuggestions.addEventListener('mousedown', (e) => {
+        e.preventDefault(); 
+        const item = e.target.closest('.suggestion-item');
+        if(item) {
+            const allItems = [...dom.formulaSuggestions.querySelectorAll('.suggestion-item')];
+            appState.ui.formulaSuggestions.activeIndex = allItems.indexOf(item);
+            insertSuggestion();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (appState.ui.dbHeaderContextMenu.visible && !dom.dbHeaderContextMenu.contains(e.target)) {
+            hideDbHeaderContextMenu();
         }
     });
 
