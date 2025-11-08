@@ -1447,30 +1447,30 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
-        // Dynamic positioning near the cell with fallback
+        // Position tooltip directly below the cell
         try {
             const cellRect = cell.getBoundingClientRect();
             const scrollContainer = dom.dbTable.parentElement;
             const modalBody = scrollContainer ? scrollContainer.parentElement : null;
             
             if (!scrollContainer || !modalBody) {
-                // Fallback to simpler positioning relative to viewport
+                // Fallback: position relative to viewport, directly below cell
                 popup.style.left = `${cellRect.left}px`;
-                popup.style.top = `${cellRect.bottom}px`;
+                popup.style.top = `${cellRect.bottom + 2}px`; // 2px gap below cell
             } else {
                 const modalBodyRect = modalBody.getBoundingClientRect();
-                // Calculate position relative to modal body
+                // Position relative to modal body, directly below the cell
                 const left = cellRect.left - modalBodyRect.left + scrollContainer.scrollLeft;
-                const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop;
+                const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop + 2; // 2px gap
                 popup.style.left = `${left}px`;
                 popup.style.top = `${top}px`;
             }
         } catch (err) {
             console.error('Error positioning suggestions popup:', err);
-            // Fallback to basic positioning
+            // Fallback: position relative to viewport
             const cellRect = cell.getBoundingClientRect();
             popup.style.left = `${cellRect.left}px`;
-            popup.style.top = `${cellRect.bottom}px`;
+            popup.style.top = `${cellRect.bottom + 2}px`;
         }
 
         popup.style.display = 'block';
@@ -1510,7 +1510,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Handle keyboard navigation within suggestions popup
-     * Supports: ArrowDown, ArrowUp, Enter, Tab, Escape
+     * Supports: ArrowDown, ArrowUp, Tab, Escape
+     * Note: Enter key is handled separately to allow confirming formulas
      * @param {KeyboardEvent} e - The keyboard event
      * @returns {boolean} - True if event was handled, false otherwise
      */
@@ -1526,7 +1527,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             newIndex = (activeIndex - 1 + items.length) % items.length;
-        } else if (e.key === 'Enter' || e.key === 'Tab') {
+        } else if (e.key === 'Tab') {
             e.preventDefault();
             if (activeIndex > -1) {
                 insertSuggestion();
@@ -1746,12 +1747,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         c.contentEditable=true;
                         c.dataset.header=k;
                         
-                        // Show suggestions on focus if empty
+                        // Show suggestions immediately on focus (always, not just when empty)
                         c.addEventListener('focus', () => {
-                            // Use replace to handle all whitespace including zero-width chars
-                            if (c.textContent.replace(/\s/g, '').length === 0) {
-                                updateFormulaSuggestions(c);
-                            }
+                            updateFormulaSuggestions(c);
                         });
                         
                         // Handle character input - primary trigger for updates
@@ -1761,24 +1759,38 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         
                         c.addEventListener('keydown', (e) => {
-                            // Handle suggestion navigation first (must be before other handlers)
-                            if (handleSuggestionNavigation(e)) {
-                                e.stopImmediatePropagation();
-                                return;
-                            }
-                            
-                            // Handle Enter key for formula application or navigation
+                            // Handle Enter key specially - insert suggestion if one is selected, otherwise apply formula
                             if (e.key === 'Enter' && !e.shiftKey) {
+                                const { visible, items, activeIndex } = appState.ui.formulaSuggestions;
+                                
+                                // If suggestions are visible and an item is selected, insert it
+                                if (visible && items.length > 0 && activeIndex > -1) {
+                                    e.preventDefault();
+                                    insertSuggestion();
+                                    return;
+                                }
+                                
+                                // Otherwise, apply formula or navigate
                                 e.preventDefault();
                                 const formula = c.textContent;
                                 if (formula && formula.startsWith('=')) {
+                                    // Hide suggestions before applying
+                                    hideSuggestions();
                                     applyFormulaToColumn(k, formula);
                                 } else {
+                                    hideSuggestions();
                                     const nextRow = row.parentElement.rows[rowIndex + 1];
                                     if (nextRow) {
                                         nextRow.cells[colIndex]?.focus();
                                     }
                                 }
+                                return;
+                            }
+                            
+                            // Handle other navigation keys (arrows, Tab, Escape)
+                            if (handleSuggestionNavigation(e)) {
+                                e.stopImmediatePropagation();
+                                return;
                             }
                         });
                         
