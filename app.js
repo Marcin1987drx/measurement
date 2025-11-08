@@ -1341,18 +1341,29 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     const getCaretPositionInfo = (element) => {
-        const selection = window.getSelection();
-        if (selection.rangeCount === 0) return { position: 0, textBefore: '' };
-        
-        const range = selection.getRangeAt(0);
-        const preCaretRange = range.cloneRange();
-        preCaretRange.selectNodeContents(element);
-        preCaretRange.setEnd(range.endContainer, range.endOffset);
-        
-        const position = preCaretRange.toString().length;
-        const textBefore = element.textContent.substring(0, position);
-        
-        return { position, textBefore };
+        try {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                // Fallback to end of content
+                const text = element.textContent || '';
+                return { position: text.length, textBefore: text };
+            }
+            
+            const range = selection.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(element);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            
+            const position = preCaretRange.toString().length;
+            const textBefore = (element.textContent || '').substring(0, position);
+            
+            return { position, textBefore };
+        } catch (err) {
+            console.error('Error getting caret position:', err);
+            // Fallback
+            const text = element.textContent || '';
+            return { position: text.length, textBefore: text };
+        }
     };
 
     /**
@@ -1361,40 +1372,47 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {HTMLElement} cell - The editable cell element
      */
     const updateFormulaSuggestions = (cell) => {
-        const { textBefore } = getCaretPositionInfo(cell);
-        const formula = cell.textContent;
-
-        // If empty field, show default function list
-        if (formula.trim() === '') {
-            const suggestions = AVAILABLE_FUNCTIONS.map(f => ({ ...f, type: 'function' }));
-            showSuggestions(suggestions, cell);
-            return;
-        }
-
-        // Must start with '=' for formula mode
-        if (!formula.startsWith('=')) {
-            hideSuggestions();
-            return;
-        }
-
-        const openBracketIndex = textBefore.lastIndexOf('[');
-        const closeBracketIndex = textBefore.lastIndexOf(']');
+        if (!cell) return;
         
-        // Inside a column reference [...]
-        if (openBracketIndex > closeBracketIndex) {
-            const filter = textBefore.substring(openBracketIndex + 1);
-            const suggestions = appState.data.dbHeaders
-                .filter(h => !READONLY_COLS.includes(h) && h.toLowerCase().includes(filter.toLowerCase()))
-                .map(h => ({ name: h, type: 'column' }));
-            showSuggestions(suggestions, cell);
-        } else {
-            // Outside a column tag, suggest functions
-            const lastWordMatch = textBefore.match(/(\w+)$/);
-            const filter = lastWordMatch ? lastWordMatch[1] : '';
-            const suggestions = AVAILABLE_FUNCTIONS
-                .filter(f => f.name.toLowerCase().startsWith(filter.toLowerCase()))
-                .map(f => ({ ...f, type: 'function' }));
-            showSuggestions(suggestions, cell);
+        try {
+            const { textBefore } = getCaretPositionInfo(cell);
+            const formula = cell.textContent || '';
+
+            // If empty field (trim and check for zero-width characters), show default function list
+            if (formula.replace(/\s/g, '').length === 0) {
+                const suggestions = AVAILABLE_FUNCTIONS.map(f => ({ ...f, type: 'function' }));
+                showSuggestions(suggestions, cell);
+                return;
+            }
+
+            // Must start with '=' for formula mode
+            if (!formula.startsWith('=')) {
+                hideSuggestions();
+                return;
+            }
+
+            const openBracketIndex = textBefore.lastIndexOf('[');
+            const closeBracketIndex = textBefore.lastIndexOf(']');
+            
+            // Inside a column reference [...]
+            if (openBracketIndex > closeBracketIndex) {
+                const filter = textBefore.substring(openBracketIndex + 1);
+                const suggestions = appState.data.dbHeaders
+                    .filter(h => !READONLY_COLS.includes(h) && h.toLowerCase().includes(filter.toLowerCase()))
+                    .map(h => ({ name: h, type: 'column' }));
+                showSuggestions(suggestions, cell);
+            } else {
+                // Outside a column tag, suggest functions
+                const lastWordMatch = textBefore.match(/(\w+)$/);
+                const filter = lastWordMatch ? lastWordMatch[1] : '';
+                const suggestions = AVAILABLE_FUNCTIONS
+                    .filter(f => f.name.toLowerCase().startsWith(filter.toLowerCase()))
+                    .map(f => ({ ...f, type: 'function' }));
+                showSuggestions(suggestions, cell);
+            }
+        } catch (err) {
+            console.error('Error updating formula suggestions:', err);
+            hideSuggestions();
         }
     };
     
@@ -1406,6 +1424,11 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     const showSuggestions = (items, cell) => {
         const popup = dom.formulaSuggestions;
+        if (!popup || !cell) {
+            console.warn('showSuggestions: missing popup or cell element');
+            return;
+        }
+
         appState.ui.formulaSuggestions.items = items;
         appState.ui.formulaSuggestions.activeIndex = -1;
         appState.ui.formulaSuggestions.targetCell = cell;
@@ -1424,26 +1447,42 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
-        // Dynamic positioning near the cell
-        const cellRect = cell.getBoundingClientRect();
-        const scrollContainer = dom.dbTable.parentElement;
-        const modalBody = scrollContainer.parentElement; // modal-body
-        const modalBodyRect = modalBody.getBoundingClientRect();
+        // Dynamic positioning near the cell with fallback
+        try {
+            const cellRect = cell.getBoundingClientRect();
+            const scrollContainer = dom.dbTable.parentElement;
+            const modalBody = scrollContainer ? scrollContainer.parentElement : null;
+            
+            if (!scrollContainer || !modalBody) {
+                // Fallback to simpler positioning relative to viewport
+                popup.style.left = `${cellRect.left}px`;
+                popup.style.top = `${cellRect.bottom}px`;
+            } else {
+                const modalBodyRect = modalBody.getBoundingClientRect();
+                // Calculate position relative to modal body
+                const left = cellRect.left - modalBodyRect.left + scrollContainer.scrollLeft;
+                const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop;
+                popup.style.left = `${left}px`;
+                popup.style.top = `${top}px`;
+            }
+        } catch (err) {
+            console.error('Error positioning suggestions popup:', err);
+            // Fallback to basic positioning
+            const cellRect = cell.getBoundingClientRect();
+            popup.style.left = `${cellRect.left}px`;
+            popup.style.top = `${cellRect.bottom}px`;
+        }
 
-        // Calculate position relative to modal body
-        const left = cellRect.left - modalBodyRect.left + scrollContainer.scrollLeft;
-        const top = cellRect.bottom - modalBodyRect.top + scrollContainer.scrollTop;
-
-        popup.style.left = `${left}px`;
-        popup.style.top = `${top}px`;
         popup.style.display = 'block';
         
-        // Trigger fade-in animation
+        // Ensure visible class is added after display is set
+        // Use double requestAnimationFrame for better browser compatibility
         requestAnimationFrame(() => {
-            popup.classList.add('visible');
+            requestAnimationFrame(() => {
+                popup.classList.add('visible');
+                appState.ui.formulaSuggestions.visible = true;
+            });
         });
-        
-        appState.ui.formulaSuggestions.visible = true;
     };
 
     /**
@@ -1451,18 +1490,22 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     const hideSuggestions = () => {
         const popup = dom.formulaSuggestions;
+        if (!popup) return;
+        
+        // Set state first to prevent race conditions
+        appState.ui.formulaSuggestions.visible = false;
+        appState.ui.formulaSuggestions.items = [];
+        appState.ui.formulaSuggestions.activeIndex = -1;
+        
         popup.classList.remove('visible');
         
         // Wait for fade-out animation before hiding
         setTimeout(() => {
+            // Double-check state hasn't changed
             if (!appState.ui.formulaSuggestions.visible) {
                 popup.style.display = 'none';
             }
         }, 200); // Match CSS transition duration
-        
-        appState.ui.formulaSuggestions.visible = false;
-        appState.ui.formulaSuggestions.items = [];
-        appState.ui.formulaSuggestions.activeIndex = -1;
     };
 
     /**
@@ -1528,64 +1571,78 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     const insertSuggestion = () => {
         const { items, activeIndex, targetCell } = appState.ui.formulaSuggestions;
-        if (activeIndex < 0 || !targetCell) return;
-
-        const selectedItem = items[activeIndex];
-        const { textBefore } = getCaretPositionInfo(targetCell);
-        const currentText = targetCell.textContent;
-        
-        let textToInsert = '';
-        let textToReplace = '';
-        let cursorOffset = 0;
-
-        if (selectedItem.type === 'column') {
-            // Replace everything from [ to current position
-            const openBracketIndex = textBefore.lastIndexOf('[');
-            textToReplace = textBefore.substring(openBracketIndex);
-            textToInsert = `[${selectedItem.name}]`;
-            cursorOffset = 0; // Place cursor after ]
-        } else {
-            // Function suggestion
-            // If we're in an empty field or just typed '=', prepend '=' if needed
-            if (currentText.trim() === '') {
-                textToReplace = '';
-                textToInsert = `=${selectedItem.name}()`;
-                cursorOffset = -1; // Place cursor between ()
-            } else {
-                const lastWordMatch = textBefore.match(/(\w+)$/);
-                textToReplace = lastWordMatch ? lastWordMatch[1] : '';
-                textToInsert = `${selectedItem.name}()`;
-                cursorOffset = -1; // Place cursor between ()
-            }
+        if (activeIndex < 0 || !targetCell || !items || !items[activeIndex]) {
+            console.warn('insertSuggestion: invalid state');
+            return;
         }
-        
-        const textAfter = currentText.substring(textBefore.length);
-        const newText = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
-        
-        targetCell.textContent = newText;
 
-        // Set cursor position
-        const range = document.createRange();
-        const sel = window.getSelection();
-        const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length + cursorOffset;
-        
-        if (targetCell.childNodes.length > 0 && targetCell.childNodes[0].nodeType === Node.TEXT_NODE) {
+        try {
+            const selectedItem = items[activeIndex];
+            const { textBefore } = getCaretPositionInfo(targetCell);
+            const currentText = targetCell.textContent || '';
+            
+            let textToInsert = '';
+            let textToReplace = '';
+            let cursorOffset = 0;
+
+            if (selectedItem.type === 'column') {
+                // Replace everything from [ to current position
+                const openBracketIndex = textBefore.lastIndexOf('[');
+                textToReplace = textBefore.substring(openBracketIndex);
+                textToInsert = `[${selectedItem.name}]`;
+                cursorOffset = 0; // Place cursor after ]
+            } else {
+                // Function suggestion
+                // If we're in an empty field or just typed '=', prepend '=' if needed
+                if (currentText.replace(/\s/g, '').length === 0) {
+                    textToReplace = '';
+                    textToInsert = `=${selectedItem.name}()`;
+                    cursorOffset = -1; // Place cursor between ()
+                } else {
+                    const lastWordMatch = textBefore.match(/(\w+)$/);
+                    textToReplace = lastWordMatch ? lastWordMatch[1] : '';
+                    textToInsert = `${selectedItem.name}()`;
+                    cursorOffset = -1; // Place cursor between ()
+                }
+            }
+            
+            const textAfter = currentText.substring(textBefore.length);
+            const newText = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
+            
+            targetCell.textContent = newText;
+
+            // Set cursor position with enhanced error handling
             try {
-                const textNode = targetCell.childNodes[0];
-                const safePos = Math.max(0, Math.min(newCaretPos, textNode.length));
-                range.setStart(textNode, safePos);
-                range.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(range);
+                const range = document.createRange();
+                const sel = window.getSelection();
+                const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length + cursorOffset;
+                
+                // Ensure we have a text node
+                if (targetCell.childNodes.length === 0) {
+                    targetCell.appendChild(document.createTextNode(newText));
+                }
+                
+                if (targetCell.childNodes.length > 0 && targetCell.childNodes[0].nodeType === Node.TEXT_NODE) {
+                    const textNode = targetCell.childNodes[0];
+                    const safePos = Math.max(0, Math.min(newCaretPos, textNode.length));
+                    range.setStart(textNode, safePos);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
             } catch (e) {
                 console.error('Error setting cursor position:', e);
+                // Fallback: just focus the cell
+                targetCell.focus();
             }
-        }
 
-        // Trigger update to show next suggestions if needed
-        setTimeout(() => {
-            updateFormulaSuggestions(targetCell);
-        }, 50);
+            // Trigger update to show next suggestions if needed
+            setTimeout(() => {
+                updateFormulaSuggestions(targetCell);
+            }, 50);
+        } catch (err) {
+            console.error('Error inserting suggestion:', err);
+        }
     };
 
     // =========================================
@@ -1691,27 +1748,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         // Show suggestions on focus if empty
                         c.addEventListener('focus', () => {
-                            if (c.textContent.trim() === '') {
+                            // Use replace to handle all whitespace including zero-width chars
+                            if (c.textContent.replace(/\s/g, '').length === 0) {
                                 updateFormulaSuggestions(c);
                             }
                         });
                         
-                        // Handle character input and trigger keys
+                        // Handle character input - primary trigger for updates
                         c.addEventListener('input', (e) => {
+                            // Input event handles all text changes, no need for redundant keyup
                             updateFormulaSuggestions(c);
                         });
                         
-                        c.addEventListener('keyup', (e) => {
-                            // Trigger suggestions on specific keys
-                            if (['=', '[', ']'].includes(e.key)) {
-                                updateFormulaSuggestions(c);
-                            } else if (!['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
-                                updateFormulaSuggestions(c);
-                            }
-                        });
-                        
                         c.addEventListener('keydown', (e) => {
-                            // Handle suggestion navigation first
+                            // Handle suggestion navigation first (must be before other handlers)
                             if (handleSuggestionNavigation(e)) {
                                 e.stopImmediatePropagation();
                                 return;
@@ -1721,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();
                                 const formula = c.textContent;
-                                if (formula.startsWith('=')) {
+                                if (formula && formula.startsWith('=')) {
                                     applyFormulaToColumn(k, formula);
                                 } else {
                                     const nextRow = row.parentElement.rows[rowIndex + 1];
@@ -1732,7 +1782,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         });
                         
-                        c.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
+                        // Use longer delay to avoid conflict with mousedown on suggestions
+                        c.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
                     } else {
                         c.classList.add('readonly-col');
                     }
