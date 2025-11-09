@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isPanning: false,
             panStart: { x: 0, y: 0 },
             currentMPView: null,
+            labelUpdateScheduled: false,
             dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
             dbDraggedColumnIndex: -1,
             formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null }
@@ -265,6 +266,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         dom.btnResetView.style.display = appState.ui.isZoomActive ? 'block' : 'none';
         updateMinimap();
+        
+        // Reposition labels after zoom change
+        fitLabelsToView();
     };
 
     const resetCanvasView = (animate = true) => {
@@ -781,14 +785,21 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const fitLabelsToView = () => {
-        const containerRect = dom.labelsContainer.getBoundingClientRect();
-        if (containerRect.width === 0) return;
+        // Use offsetWidth/offsetHeight instead of getBoundingClientRect()
+        // These return the BASE size before CSS transform, which is what we need
+        // because viewBox coordinates (1000x700) are relative to the base container size
+        const baseWidth = dom.labelsContainer.offsetWidth;
+        const baseHeight = dom.labelsContainer.offsetHeight;
+        if (baseWidth === 0 || baseHeight === 0) return;
+        
         const isEditor = appState.ui.isEditorOpen;
         const currentData = isEditor ? appState.ui.editorState : appState.data.currentMap;
         if (!currentData) return;
        
-        const scaleX = containerRect.width / VIEWBOX_WIDTH;
-        const scaleY = containerRect.height / VIEWBOX_HEIGHT;
+        // Calculate scale based on BASE size (before CSS transform)
+        // The CSS transform on the container will handle the zoom/pan
+        const scaleX = baseWidth / VIEWBOX_WIDTH;
+        const scaleY = baseHeight / VIEWBOX_HEIGHT;
 
         const positionElement = (element, pos) => {
             if (!element || !pos) return;
@@ -1125,71 +1136,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const viewBoxX = Math.max(0, Math.min(VIEWBOX_WIDTH, coords.x));
                     const viewBoxY = Math.max(0, Math.min(VIEWBOX_HEIGHT, coords.y));
 
+                    // Save viewBox coordinates (same as arrows do)
                     if (type === 'label' && mp) {
-                        // Save viewBox coordinates (same as arrows)
                         mp.labelX = viewBoxX;
                         mp.labelY = viewBoxY;
-                        // Don't update position during drag - let fitLabelsToView handle it
                     } else if (type === 'qrLabel') {
                         appState.ui.editorState.meta.qrLabelPos = { x: viewBoxX, y: viewBoxY };
                     } else if (type === 'dateLabel') {
                         appState.ui.editorState.meta.dateLabelPos = { x: viewBoxX, y: viewBoxY };
                     }
                     
-                    // Update label position immediately using fitLabelsToView logic
-                    const containerRect = dom.labelsContainer.getBoundingClientRect();
-                    if (containerRect.width > 0) {
-                        const scaleX = containerRect.width / VIEWBOX_WIDTH;
-                        const scaleY = containerRect.height / VIEWBOX_HEIGHT;
-                        
-                        if (type === 'label' && mp) {
-                            const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
-                            if (label) {
-                                label.style.left = `${viewBoxX * scaleX}px`;
-                                label.style.top = `${viewBoxY * scaleY}px`;
-                                // Preserve CSS transform
-                                const { scale } = appState.ui.canvasZoom;
-                            const originalTransform = label.dataset.originalTransform || 'translate(-50%, -50%)';
-                            label.dataset.originalTransform = originalTransform;
-                            label.style.transform = `scale(${1/scale}) ${originalTransform}`;
-                                // CRITICAL: Force visibility during drag
-                                label.style.display = '';
-                                label.style.visibility = 'visible';
-                                label.style.opacity = '1';
-                                label.style.pointerEvents = 'auto';
-                            }
-                        } else if (type === 'qrLabel') {
-                            const qrLabel = dom.labelsContainer.querySelector('[data-drag-type="qrLabel"]');
-                            if (qrLabel) {
-                                qrLabel.style.left = `${viewBoxX * scaleX}px`;
-                                qrLabel.style.top = `${viewBoxY * scaleY}px`;
-                                const { scale } = appState.ui.canvasZoom;
-                            const originalTransform = qrLabel.dataset.originalTransform || 'translate(-50%, -50%)';
-                            qrLabel.dataset.originalTransform = originalTransform;
-                            qrLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
-                                // CRITICAL: Force visibility during drag
-                                qrLabel.style.display = '';
-                                qrLabel.style.visibility = 'visible';
-                                qrLabel.style.opacity = '1';
-                                qrLabel.style.pointerEvents = 'auto';
-                            }
-                        } else if (type === 'dateLabel') {
-                            const dateLabel = dom.labelsContainer.querySelector('[data-drag-type="dateLabel"]');
-                            if (dateLabel) {
-                                dateLabel.style.left = `${viewBoxX * scaleX}px`;
-                                dateLabel.style.top = `${viewBoxY * scaleY}px`;
-                                const { scale } = appState.ui.canvasZoom;
-                            const originalTransform = dateLabel.dataset.originalTransform || 'translate(-50%, -50%)';
-                            dateLabel.dataset.originalTransform = originalTransform;
-                            dateLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
-                                // CRITICAL: Force visibility during drag
-                                dateLabel.style.display = '';
-                                dateLabel.style.visibility = 'visible';
-                                dateLabel.style.opacity = '1';
-                                dateLabel.style.pointerEvents = 'auto';
-                            }
-                        }
-                    }
+                    // Use fitLabelsToView to update position - it uses the same calculation as rendering
+                    // This ensures labels are positioned correctly during drag
+                    fitLabelsToView();
                 }
                 // Don't call renderCanvas() during drag - it causes flickering and position jumps
                 // We'll call it on mouseup instead
