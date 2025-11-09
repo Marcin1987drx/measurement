@@ -638,7 +638,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgRect = dom.backgroundImg.getBoundingClientRect();
         const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
         const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.left}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
-        dom.overlaySvg.style.cssText = commonStyle + `pointer-events: none;`;
+        const svgPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
+        dom.overlaySvg.style.cssText = commonStyle + `pointer-events: ${svgPointerEvents};`;
         const labelsPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
         dom.labelsContainer.style.cssText = commonStyle + `pointer-events: ${labelsPointerEvents};`;
         fitLabelsToView();
