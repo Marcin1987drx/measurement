@@ -1,54 +1,245 @@
-                } else if (type === 'label' || type === 'qrLabel' || type === 'dateLabel') {
-                    // Use EXACT same approach as arrows - convert cursor to viewBox coordinates
-                    const pt = dom.overlaySvg.createSVGPoint();
-                    pt.x = e.clientX;
-                    pt.y = e.clientY;
-                    const svgTransform = dom.overlaySvg.getScreenCTM()?.inverse();
-                    if (!svgTransform) return;
-                    const coords = pt.matrixTransform(svgTransform);
-                    
-                    // Clamp coordinates to valid viewBox range
-                    const viewBoxX = Math.max(0, Math.min(VIEWBOX_WIDTH, coords.x));
-                    const viewBoxY = Math.max(0, Math.min(VIEWBOX_HEIGHT, coords.y));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Measure + Visualize (Dräxlmaier)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body lang="en">
+    <div id="app">
+        <header class="app-header">
+            <div class="project-info">
+                 <div class="brand-identity">
+                    <img id="header-logo" src="" alt="Logo" style="height: 36px; display: none;">
+                    <h2>Dräxlmaier Group</h2>
+                </div>
+                <button id="btn-project-folder" class="btn btn-primary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h6l2 2h8a2 2 0 0 1 2 2v13a2 2 0 0 1-2-2H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2z"></path></svg> <span data-i18n="projectFolder">Project Folder</span></button>
+                <div id="project-folder-name" class="current-project-name">No Project Selected</div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-new-schema" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> <span data-i18n="newSchema">New Schema</span></button>
+                <button id="btn-edit-schema" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 18.88V21h2.12l8.76-8.76-2.12-2.12L5 18.88zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.12-2.12c-.39-.39-1.02-.39-1.41 0l-1.55 1.55 2.12 2.12L20.71 7.04z"></path></svg> <span data-i18n="editSchema">Edit Schema</span></button>
+                <button id="btn-db-viewer" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H4v20h16V8l-6-6zM9 14H6v-2h3v2zm3 0h-2v-2h2v2zm3 0h-2v-2h2v2zM9 10H6V8h3v2zm3 0h-2V8h2v2zm3 0h-2V8h2v2z"></path></svg> <span data-i18n="dbViewer">DB Viewer</span></button>
+                <button id="btn-analysis" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8h2.8v6h-2.8v-6z"></path></svg> <span data-i18n="analysis">Analysis</span></button>
+                <select id="language-toggle" class="select-field">
+                    <option value="en" selected>EN</option>
+                    <option value="pl">PL</option>
+                    <option value="de">DE</option>
+                </select>
+                <button id="theme-toggle" class="btn btn-secondary" title="Toggle theme">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 15.31 23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"></path></svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2c-1.82 0-3.53.5-5 1.35C7.99 5.08 10 8.3 10 12s-2.01 6.92-5 8.65C6.47 21.5 8.18 22 10 22c5.52 0 10-4.48 10-10S15.52 2 10 2z"></path></svg>
+                </button>
+            </div>
+        </header>
 
-                    if (type === 'label' && mp) {
-                        mp.labelX = viewBoxX;
-                        mp.labelY = viewBoxY;
-                    } else if (type === 'qrLabel') {
-                        appState.ui.editorState.meta.qrLabelPos = { x: viewBoxX, y: viewBoxY };
-                    } else if (type === 'dateLabel') {
-                        appState.ui.editorState.meta.dateLabelPos = { x: viewBoxX, y: viewBoxY };
-                    }
-                    
-                    // Update label position immediately
-                    const containerRect = dom.labelsContainer.getBoundingClientRect();
-                    if (containerRect.width > 0) {
-                        const scaleX = containerRect.width / VIEWBOX_WIDTH;
-                        const scaleY = containerRect.height / VIEWBOX_HEIGHT;
-                        
-                        let labelElement = null;
-                        if (type === 'label' && mp) {
-                            labelElement = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
-                        } else if (type === 'qrLabel') {
-                            labelElement = dom.labelsContainer.querySelector('[data-drag-type="qrLabel"]');
-                        } else if (type === 'dateLabel') {
-                            labelElement = dom.labelsContainer.querySelector('[data-drag-type="dateLabel"]');
-                        }
-                        
-                        if (labelElement) {
-                            labelElement.style.left = `${viewBoxX * scaleX}px`;
-                            labelElement.style.top = `${viewBoxY * scaleY}px`;
-                            
-                            const currentScale = appState.ui.canvasZoom.scale;
-                            const originalTransform = labelElement.dataset.originalTransform || 'translate(-50%, -50%)';
-                            labelElement.dataset.originalTransform = originalTransform;
-                            labelElement.style.transform = `scale(${1/currentScale}) ${originalTransform}`;
-                            
-                            // CRITICAL: Force visibility during drag
-                            labelElement.style.display = '';
-                            labelElement.style.visibility = 'visible';
-                            labelElement.style.opacity = '1';
-                            labelElement.style.pointerEvents = 'auto';
-                        }
-                    }
-                }
+        <main class="main-content">
+            <aside class="form-panel">
+                <div class="form-header">
+                    <div class="input-group">
+                        <label for="qr-code" data-i18n="qrCode">QR Code</label><input type="text" id="qr-code" class="input-field">
+                    </div>
+                    <div class="input-group">
+                        <label for="map-select" data-i18n="map">Schema</label><select id="map-select" class="select-field"></select>
+                    </div>
+                </div>
+                <div id="mp-list" class="mp-list"></div>
+                <div class="form-footer">
+                    <div class="visualization-bg-controls">
+                        <label for="visualization-bg-toggle">Background:</label>
+                        <input type="checkbox" id="visualization-bg-toggle" checked>
+                        <input type="color" id="visualization-bg-color" value="#FFFFFF" style="height: 30px; padding: 2px; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-tertiary);">
+                    </div>
+                    <div class="form-footer-main-action">
+                        <button id="btn-save" class="btn btn-primary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"></path></svg> <span data-i18n="saveAndExport">Save & Export</span></button>
+                    </div>
+                </div>
+            </aside>
+
+            <section id="canvas-wrapper" class="canvas-container">
+                <img id="background-img" src="" alt="Technical background image" style="display: none;">
+                 <div id="labels-container"></div>
+                <svg id="overlay-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+                <button id="btn-reset-view" class="btn btn-secondary" style="display: none;">🔍 Reset View</button>
+                <canvas id="minimap-canvas" style="display: none;"></canvas>
+            </section>
+        </main>
+        <footer style="position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; padding: 5px; background-color: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.75em; border-top: 1px solid var(--border-color);">
+            Created by Q-Support Marcin Szymański
+        </footer>
+    </div>
+
+    <div id="schema-editor" class="slide-over">
+        <div class="slide-over-header">
+            <h3><span data-i18n="schemaEditor">Schema Editor</span></h3><button id="btn-close-editor" class="btn" aria-label="Close">✖</button>
+        </div>
+        <div id="schema-editor-content" class="slide-over-content"></div>
+        <div class="slide-over-footer">
+             <button id="editor-add-mp-btn" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg> <span data-i18n="addMeasurePoint">Add Measure Point</span></button>
+             <button id="btn-save-map" class="btn btn-primary"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"></path></svg> <span data-i18n="saveSchema">Save Schema</span></button>
+        </div>
+    </div>
+
+    <div id="db-viewer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><span data-i18n="dbViewer">DB Viewer</span></h3>
+                <input type="search" id="db-search-input" data-i18n-placeholder="searchByQRCode" class="input-field" style="max-width: 300px;">
+                <button id="btn-close-db-viewer" class="btn" aria-label="Close">✖</button>
+            </div>
+            <div class="modal-body">
+                <div class="db-table-container">
+                    <table id="db-table" class="db-table"></table>
+                    <!-- NEW: Suggestions popup for formulas -->
+                    <div id="formula-suggestions" class="suggestions-popup"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-save-db" class="btn btn-primary"><span data-i18n="saveChanges">Save Changes</span></button>
+            </div>
+        </div>
+    </div>
+   
+     <div id="analysis-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><span data-i18n="analysis">Analysis</span></h3>
+                <button id="btn-close-analysis-modal" class="btn" aria-label="Close">✖</button>
+            </div>
+            <div class="modal-body">
+                <div class="analysis-body">
+                    <div class="analysis-controls">
+                        <div class="filter-group">
+                            <h4 class="filter-group-title" data-i18n="analysisMode">Analysis Mode</h4>
+                            <div class="radio-group" id="analysis-mode-selector">
+                                <input type="radio" id="mode-trend" name="analysis-mode" value="trend" checked><label for="mode-trend" data-i18n="modeTrend">Trend (over time)</label>
+                                <input type="radio" id="mode-profile" name="analysis-mode" value="profile"><label for="mode-profile" data-i18n="modeProfile">Profile (single part)</label>
+                            </div>
+                        </div>
+
+                        <div id="analysis-filter-group-trend">
+                            <div class="filter-group">
+                                <h4 class="filter-group-title" data-i18n="filters">Filters</h4>
+                                <div class="input-group">
+                                    <label for="analysis-date-from" data-i18n="dateFrom">Date from</label>
+                                    <input type="date" id="analysis-date-from" class="input-field">
+                                </div>
+                                <div class="input-group">
+                                    <label for="analysis-date-to" data-i18n="dateTo">Date to</label>
+                                    <input type="date" id="analysis-date-to" class="input-field">
+                                </div>
+                                <div class="input-group">
+                                    <label for="analysis-qr-search" data-i18n="searchByQRCode">Search by QR Code...</label>
+                                    <input type="search" id="analysis-qr-search" class="input-field">
+                                </div>
+                                 <div class="input-group">
+                                    <label data-i18n="schemaName">Schema Name</label>
+                                    <div id="analysis-schemas-list" class="checkbox-list"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="analysis-filter-group-profile" class="hidden">
+                             <div class="filter-group">
+                                <h4 class="filter-group-title" data-i18n="filters">Filters</h4>
+                                 <div class="input-group">
+                                    <label for="analysis-profile-date-from" data-i18n="dateFrom">Date from</label>
+                                    <input type="date" id="analysis-profile-date-from" class="input-field">
+                                </div>
+                                <div class="input-group">
+                                    <label for="analysis-profile-date-to" data-i18n="dateTo">Date to</label>
+                                    <input type="date" id="analysis-profile-date-to" class="input-field">
+                                </div>
+                                <label data-i18n="selectRecords">Select Record(s)</label>
+                                <div class="input-group">
+                                    <select id="analysis-record-select" class="select-field" multiple></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                             <h4 class="filter-group-title" data-i18n="chartConfig">Chart Configuration</h4>
+                             <div class="input-group">
+                                <label for="analysis-chart-title" data-i18n="chartTitle">Chart Title</label>
+                                <input type="text" id="analysis-chart-title" class="input-field">
+                             </div>
+                             <div class="input-group">
+                                <label for="analysis-chart-type" data-i18n="chartType">Chart Type</label>
+                                <select id="analysis-chart-type" class="select-field">
+                                    <option value="line" data-i18n="chartLine">Line</option>
+                                    <option value="bar" data-i18n="chartBar">Bar</option>
+                                </select>
+                             </div>
+                             <div class="input-group">
+                                <label for="analysis-axis-x" data-i18n="axisXTitle">X-Axis Title</label>
+                                <input type="text" id="analysis-axis-x" class="input-field">
+                             </div>
+                             <div class="input-group">
+                                <label for="analysis-axis-y" data-i18n="axisYTitle">Y-Axis Title</label>
+                                <input type="text" id="analysis-axis-y" class="input-field">
+                             </div>
+                             <div id="mp-list-container" class="input-group">
+                                <label data-i18n="measurePoints">Measure Points</label>
+                                <div id="analysis-mps-list" class="checkbox-list"></div>
+                            </div>
+                            <div class="input-group" style="display: flex; flex-direction: row; align-items: center; gap: 16px; margin-top: 8px;">
+                                <label for="analysis-chart-bg-toggle" style="margin-bottom: 0;">Chart Background:</label>
+                                <input type="checkbox" id="analysis-chart-bg-toggle" checked>
+                                <input type="color" id="analysis-chart-bg-color" value="#FFFFFF" style="height: 30px; padding: 2px; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-tertiary);">
+                            </div>
+                        </div>
+                        <div class="analysis-exports">
+                            <button id="btn-export-png" class="btn btn-secondary"><span data-i18n="exportPNG">Export PNG</span></button>
+                            <button id="btn-export-csv" class="btn btn-secondary"><span data-i18n="exportCSV">Export Data (CSV)</span></button>
+                        </div>
+                    </div>
+                    <div class="analysis-chart-container">
+                        <canvas id="analysis-chart"></canvas>
+                        <button id="chart-reset-view-btn" class="btn btn-secondary hidden" data-i18n="resetView">Reset View</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+   
+    <!-- NEW: Context menu for DB table headers -->
+    <div id="db-header-context-menu" class="context-menu">
+        <div class="context-menu-item" data-action="rename">Zmień nazwę</div>
+        <div class="context-menu-item" data-action="formula">Zastosuj formułę...</div>
+        <div class="context-menu-item context-menu-item-danger" data-action="delete">Usuń kolumnę</div>
+    </div>
+
+     <div id="save-confirmation-overlay" class="save-overlay">
+        <div class="save-overlay-content">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"></path></svg>
+            <span data-i18n="saveSuccess">Saved!</span>
+        </div>
+    </div>
+
+    <input type="file" id="background-uploader" class="hidden" accept="image/png, image/jpeg, image/svg+xml">
+
+    <template id="mp-row-template-single">
+        <div class="mp-row mp-row-single">
+            <div class="mp-name"></div>
+            <div class="mp-value input-group"><input type="text" class="input-field"></div>
+            <div class="mp-status-text"></div>
+            <div class="mp-spec"></div>
+        </div>
+    </template>
+
+    <template id="mp-row-template-table">
+        <div class="mp-row mp-row-table">
+             <div class="mp-table-header">
+                <span class="mp-name"></span>
+                <span class="mp-status-text"></span>
+            </div>
+            <div class="mp-table-inputs"></div>
+        </div>
+    </template>
+   
+    <script src="libs/chart.min.js"></script>
+    <script src="libs/chartjs-plugin-zoom.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
