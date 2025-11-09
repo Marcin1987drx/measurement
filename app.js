@@ -1152,9 +1152,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             const originalTransform = label.dataset.originalTransform || 'translate(-50%, -50%)';
                             label.dataset.originalTransform = originalTransform;
                             label.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                                // CRITICAL: Force visibility during drag
                                 label.style.display = '';
                                 label.style.visibility = 'visible';
                                 label.style.opacity = '1';
+                                label.style.pointerEvents = 'auto';
                             }
                         } else if (type === 'qrLabel') {
                             const qrLabel = dom.labelsContainer.querySelector('[data-drag-type="qrLabel"]');
@@ -1165,6 +1167,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             const originalTransform = qrLabel.dataset.originalTransform || 'translate(-50%, -50%)';
                             qrLabel.dataset.originalTransform = originalTransform;
                             qrLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                                // CRITICAL: Force visibility during drag
+                                qrLabel.style.display = '';
+                                qrLabel.style.visibility = 'visible';
+                                qrLabel.style.opacity = '1';
+                                qrLabel.style.pointerEvents = 'auto';
                             }
                         } else if (type === 'dateLabel') {
                             const dateLabel = dom.labelsContainer.querySelector('[data-drag-type="dateLabel"]');
@@ -1175,6 +1182,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             const originalTransform = dateLabel.dataset.originalTransform || 'translate(-50%, -50%)';
                             dateLabel.dataset.originalTransform = originalTransform;
                             dateLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                                // CRITICAL: Force visibility during drag
+                                dateLabel.style.display = '';
+                                dateLabel.style.visibility = 'visible';
+                                dateLabel.style.opacity = '1';
+                                dateLabel.style.pointerEvents = 'auto';
                             }
                         }
                     }
