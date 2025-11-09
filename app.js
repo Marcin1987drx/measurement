@@ -48,6 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
             hiddenRecordIds: new Set(),
             canvasZoom: { scale: 1, offsetX: 0, offsetY: 0 },
             isZoomActive: false,
+            isPanning: false,
+            panStart: { x: 0, y: 0 },
             currentMPView: null,
             dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
             dbDraggedColumnIndex: -1,
@@ -130,9 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // [SECTION] TRANSLATIONS & HELPERS
     // =========================================
     const translations = {
-        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Version', drawingBackground: 'Drawing Background', upload: 'Upload', metaLabels: 'Meta Labels', showQR: 'Show QR', showDate: 'Show Date', addMeasurePoint: 'Add Measure Point', saveSchema: 'Save Schema', comment: 'Comment', saveAndExport: 'Save & Export', columns: 'Columns', addColumn: 'Add Column', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Arrows', addArrow: 'Add Arrow', arrowWidth: 'Width', arrowColor: 'Color', arrowHead: 'Head', setView: 'Set View', clearView: 'Clear View', confirmExitEditor: 'You have unsaved changes. Are you sure you want to exit?', schemaInfoMissing: 'Schema name and version are required.', deleteSuccess: 'Deleted successfully', deleteError: 'Error deleting file', saveSuccess: 'Saved successfully!', saveError: 'Error saving file', exportSuccess: 'Export successful!', confirmDelete: 'Are you sure you want to delete this schema?', confirmDeleteRecord: 'Are you sure you want to delete this record?', selectMapPrompt: 'Select a schema to begin.', map: 'Schema', actions: 'Actions', searchByQRCode: 'Search by QR code...' },
-        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja', drawingBackground: 'Rysunek Tła', upload: 'Wgraj', metaLabels: 'Etykiety Meta', showQR: 'Pokaż QR', showDate: 'Pokaż Datę', addMeasurePoint: 'Dodaj Punkt Pom.', saveSchema: 'Zapisz Schemat', comment: 'Komentarz', saveAndExport: 'Zapisz i Eksportuj', columns: 'Kolumny', addColumn: 'Dodaj Kolumnę', name: 'Nazwa', unit: 'Jedn.', nominal: 'Nominał', min: 'Min', max: 'Max', arrows: 'Strzałki', addArrow: 'Dodaj Strzałkę', arrowWidth: 'Grubość', arrowColor: 'Kolor', arrowHead: 'Grot', setView: 'Ustaw Widok', clearView: 'Wyczyść Widok', confirmExitEditor: 'Masz niezapisane zmiany. Czy na pewno chcesz wyjść?', schemaInfoMissing: 'Nazwa i wersja schematu są wymagane.', deleteSuccess: 'Usunięto pomyślnie', deleteError: 'Błąd podczas usuwania', saveSuccess: 'Zapisano pomyślnie!', saveError: 'Błąd zapisu', exportSuccess: 'Eksport udany!', confirmDelete: 'Czy na pewno usunąć ten schemat?', confirmDeleteRecord: 'Czy na pewno usunąć ten rekord?', selectMapPrompt: 'Wybierz schemat, aby rozpocząć.', map: 'Schemat', actions: 'Akcje', searchByQRCode: 'Szukaj po kodzie QR...' },
-        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Version', drawingBackground: 'Zeichnungshintergrund', upload: 'Hochladen', metaLabels: 'Meta-Labels', showQR: 'QR anzeigen', showDate: 'Datum anzeigen', addMeasurePoint: 'Messpunkt hinzufügen', saveSchema: 'Schema speichern', comment: 'Kommentar', saveAndExport: 'Speichern & Export', columns: 'Spalten', addColumn: 'Spalte hinzufügen', name: 'Name', unit: 'Einheit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Pfeile', addArrow: 'Pfeil hinzufügen', arrowWidth: 'Breite', arrowColor: 'Farbe', arrowHead: 'Pfeilspitze', setView: 'Ansicht festlegen', clearView: 'Ansicht löschen', confirmExitEditor: 'Sie haben ungespeicherte Änderungen. Wollen Sie wirklich schließen?', schemaInfoMissing: 'Schemaname und Version sind erforderlich.', deleteSuccess: 'Erfolgreich gelöscht', deleteError: 'Fehler beim Löschen', saveSuccess: 'Erfolgreich gespeichert!', saveError: 'Fehler beim Speichern', exportSuccess: 'Export erfolgreich!', confirmDelete: 'Möchten Sie dieses Schema wirklich löschen?', confirmDeleteRecord: 'Möchten Sie diesen Datensatz wirklich löschen?', selectMapPrompt: 'Wählen Sie ein Schema, um zu beginnen.', map: 'Schema', actions: 'Aktionen', searchByQRCode: 'Suche nach QR-Code...' },
+        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Schema Version', drawingBackground: 'Drawing Background', metaLabels: 'Meta Labels', showQR: 'Show QR', showDate: 'Show Date', selectMapPrompt: 'Select a schema to begin.', comment: 'Comment', save: 'Save', saveSuccess: 'Saved!', map: 'Schema', deleteSchema: 'Delete Schema', confirmDelete: 'Are you sure you want to delete this schema?', deleteSuccess: 'Schema deleted.', deleteError: 'Error deleting schema.', schemaInfoMissing: 'Schema Name and Version are required.', saveError: 'Error saving.', exportSuccess: 'Export successful!', confirmExitEditor: 'You have unsaved changes. Are you sure you want to exit?', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Arrows', addArrow: 'Add Arrow', arrowWidth: 'Width', arrowColor: 'Color', arrowHead: 'Head', columns: 'Columns', addColumn: 'Add Column', setView: 'Set View', clearView: 'Clear View', confirmDeleteRecord: "Are you sure you to delete this record?", exportPNG: "Export PNG", actions: "Actions" },
+        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja Schematu', drawingBackground: 'Tło Rysunku', metaLabels: 'Etykiety Meta', showQR: 'Pokaż QR', showDate: 'Pokaż Datę', selectMapPrompt: 'Wybierz schemat, aby rozpocząć.', comment: 'Komentarz', save: 'Zapisz', saveSuccess: 'Zapisano!', map: 'Schemat', deleteSchema: 'Usuń Schemat', confirmDelete: 'Czy na pewno chcesz usunąć ten schemat?', deleteSuccess: 'Schemat usunięty.', deleteError: 'Błąd podczas usuwania schematu.', schemaInfoMissing: 'Nazwa i wersja schematu są wymagane.', saveError: 'Błąd zapisu.', exportSuccess: 'Eksport udany!', confirmExitEditor: 'Masz niezapisane zmiany. Czy na pewno chcesz wyjść?', name: 'Nazwa', unit: 'Jedn.', nominal: 'Nominał', min: 'Min', max: 'Max', arrows: 'Strzałki', addArrow: 'Dodaj strzałkę', arrowWidth: 'Szerokość', arrowColor: 'Kolor', arrowHead: 'Grot', columns: 'Kolumny', addColumn: 'Dodaj kolumnę', setView: 'Ustaw Widok', clearView: 'Wyczyść Widok', confirmDeleteRecord: "Czy na pewno chcesz usunąć ten rekord?", exportPNG: "Eksportuj PNG", actions: "Akcje" },
+        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Schemaversion', drawingBackground: 'Zeichnungshintergrund', metaLabels: 'Meta-Labels', showQR: 'QR anzeigen', showDate: 'Datum anzeigen', selectMapPrompt: 'Wählen Sie ein Schema, um zu beginnen.', comment: 'Kommentar', save: 'Speichern', saveSuccess: 'Gespeichert!', map: 'Schema', deleteSchema: 'Schema löschen', confirmDelete: 'Sind Sie sicher, dass Sie dieses Schema löschen möchten?', deleteSuccess: 'Schema gelöscht.', deleteError: 'Fehler beim Löschen des Schemas.', schemaInfoMissing: 'Schemaname und -version sind erforderlich.', saveError: 'Fehler beim Speichern.', exportSuccess: 'Export erfolgreich!', confirmExitEditor: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie den Editor verlassen möchten?', name: 'Name', unit: 'Einheit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Pfeile', addArrow: 'Pfeil hinzufügen', arrowWidth: 'Breite', arrowColor: 'Farbe', arrowHead: 'Spitze', columns: 'Spalten', addColumn: 'Spalte hinzufügen', setView: 'Ansicht festlegen', clearView: 'Ansicht löschen', confirmDeleteRecord: "Möchten Sie diesen Datensatz wirklich löschen?", exportPNG: "PNG exportieren", actions: "Aktionen" },
     };
     const t = (key) => translations[appState.ui.language]?.[key] || key;
     const formatNumber = (num, digits = 3) => {
@@ -216,25 +218,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { scale, offsetX, offsetY } = view;
         appState.ui.canvasZoom = { scale, offsetX, offsetY };
-        appState.ui.isZoomActive = true;
+        appState.ui.isZoomActive = scale !== 1 || offsetX !== 0 || offsetY !== 0;
         appState.ui.currentMPView = view;
 
         const transform = `scale(${scale}) translate(${offsetX}px, ${offsetY}px)`;
         
-        if (!animate) {
-            dom.backgroundImg.style.transition = 'none';
-            dom.overlaySvg.style.transition = 'none';
-            dom.labelsContainer.style.transition = 'none';
-        }
+        const transitionStyle = animate ? '' : 'none';
+        dom.backgroundImg.style.transition = transitionStyle;
+        dom.overlaySvg.style.transition = transitionStyle;
+        dom.labelsContainer.style.transition = transitionStyle;
 
         dom.backgroundImg.style.transform = transform;
         dom.overlaySvg.style.transform = transform;
         dom.labelsContainer.style.transform = transform;
 
-        // Scale labels inversely so they don't grow
-        const labels = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label');
-        labels.forEach(label => {
-            label.style.transform = `translate(-50%, -50%) scale(${1/scale})`;
+        // Scale labels and handles inversely so they don't grow/shrink
+        const elementsToScale = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label, .resizing-handle');
+        elementsToScale.forEach(el => {
+            // We store original transform in a data attribute to avoid conflicts
+            const originalTransform = el.dataset.originalTransform || 'translate(-50%, -50%)';
+            el.style.transform = `${originalTransform} scale(${1/scale})`;
+        });
+        
+        const svgHandles = dom.overlaySvg.querySelectorAll('circle');
+        svgHandles.forEach(handle => {
+             handle.setAttribute('r', 8 / scale);
         });
 
         if (!animate) {
@@ -245,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 50);
         }
 
-        dom.btnResetView.style.display = 'block';
+        dom.btnResetView.style.display = appState.ui.isZoomActive ? 'block' : 'none';
         updateMinimap();
     };
 
@@ -253,20 +261,25 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.ui.canvasZoom = { scale: 1, offsetX: 0, offsetY: 0 };
         appState.ui.isZoomActive = false;
         appState.ui.currentMPView = null;
-
-        if (!animate) {
-            dom.backgroundImg.style.transition = 'none';
-            dom.overlaySvg.style.transition = 'none';
-            dom.labelsContainer.style.transition = 'none';
-        }
+        
+        const transitionStyle = animate ? '' : 'none';
+        dom.backgroundImg.style.transition = transitionStyle;
+        dom.overlaySvg.style.transition = transitionStyle;
+        dom.labelsContainer.style.transition = transitionStyle;
 
         dom.backgroundImg.style.transform = 'scale(1) translate(0px, 0px)';
         dom.overlaySvg.style.transform = 'scale(1) translate(0px, 0px)';
         dom.labelsContainer.style.transform = 'scale(1) translate(0px, 0px)';
 
-        const labels = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label');
-        labels.forEach(label => {
-            label.style.transform = 'translate(-50%, -50%)';
+        const elementsToScale = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label, .resizing-handle');
+        elementsToScale.forEach(el => {
+            const originalTransform = el.dataset.originalTransform || 'translate(-50%, -50%)';
+            el.style.transform = originalTransform;
+        });
+        
+        const svgHandles = dom.overlaySvg.querySelectorAll('circle');
+        svgHandles.forEach(handle => {
+            handle.setAttribute('r', '8');
         });
 
         if (!animate) {
@@ -307,59 +320,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Draw viewport rectangle
         const { scale, offsetX, offsetY } = appState.ui.canvasZoom;
-        const viewportW = 150 / scale;
-        const viewportH = 100 / scale;
-        const viewportX = 75 - (offsetX / scale) * (150 / VIEWBOX_WIDTH) - viewportW / 2;
-        const viewportY = 50 - (offsetY / scale) * (100 / VIEWBOX_HEIGHT) - viewportH / 2;
+        const mainRect = dom.canvasWrapper.getBoundingClientRect();
+        const viewWidth = mainRect.width / scale;
+        const viewHeight = mainRect.height / scale;
+
+        const minimapScaleX = 150 / (mainRect.width / scale);
+        const minimapScaleY = 100 / (mainRect.height / scale);
+
+        const rectWidth = 150 / scale;
+        const rectHeight = 100 / scale;
+        const rectX = -offsetX * (150 / mainRect.width);
+        const rectY = -offsetY * (100 / mainRect.height);
 
         ctx.strokeStyle = '#ff3b30';
         ctx.lineWidth = 2;
-        ctx.strokeRect(viewportX, viewportY, viewportW, viewportH);
+        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
     };
 
     // ZOOM IN EDITOR (wheel + drag)
-    let editorZoomPanning = false;
-    let editorZoomStart = { x: 0, y: 0 };
-
     const onEditorZoomWheel = (e) => {
         if (!appState.ui.isEditorOpen) return;
         e.preventDefault();
 
+        const rect = dom.canvasWrapper.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const oldScale = appState.ui.canvasZoom.scale;
         const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        let newScale = appState.ui.canvasZoom.scale * delta;
+        let newScale = oldScale * delta;
         newScale = Math.max(0.5, Math.min(5, newScale));
+        
+        const newOffsetX = appState.ui.canvasZoom.offsetX * (newScale / oldScale) + (x - rect.width / 2) * (1 - newScale / oldScale);
+        const newOffsetY = appState.ui.canvasZoom.offsetY * (newScale / oldScale) + (y - rect.height / 2) * (1 - newScale / oldScale);
 
         appState.ui.canvasZoom.scale = newScale;
+        appState.ui.canvasZoom.offsetX = newOffsetX;
+        appState.ui.canvasZoom.offsetY = newOffsetY;
+
         applyCanvasZoom(appState.ui.canvasZoom, false);
     };
-
-    const onEditorZoomMouseDown = (e) => {
-        if (!appState.ui.isEditorOpen || e.button !== 1) return; // Middle mouse button
-        e.preventDefault();
-        editorZoomPanning = true;
-        editorZoomStart = { x: e.clientX, y: e.clientY };
-        dom.canvasWrapper.style.cursor = 'grabbing';
-    };
-
-    const onEditorZoomMouseMove = (e) => {
-        if (!editorZoomPanning) return;
-        e.preventDefault();
-
-        const dx = e.clientX - editorZoomStart.x;
-        const dy = e.clientY - editorZoomStart.y;
-
-        appState.ui.canvasZoom.offsetX += dx / appState.ui.canvasZoom.scale;
-        appState.ui.canvasZoom.offsetY += dy / appState.ui.canvasZoom.scale;
-
-        editorZoomStart = { x: e.clientX, y: e.clientY };
-        applyCanvasZoom(appState.ui.canvasZoom, false);
-    };
-
-    const onEditorZoomMouseUp = () => {
-        editorZoomPanning = false;
-        dom.canvasWrapper.style.cursor = '';
-    };
-
+    
     // =========================================
     // [SECTION] FILE SYSTEM WRAPPERS
     // =========================================
@@ -553,6 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     input.addEventListener('blur', () => {
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                         if (label) label.classList.remove('is-blinking');
+                        resetCanvasView(); // Reset view on blur
                     });
                    
                     if (index === 0) {
@@ -581,6 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 input.addEventListener('blur', () => {
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                     if (label) label.classList.remove('is-blinking');
+                    resetCanvasView(); // Reset view on blur
                 });
             }
             dom.mpList.appendChild(row);
@@ -639,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dom.backgroundImg.src || !dom.backgroundImg.complete || dom.backgroundImg.naturalWidth === 0) return;
         const imgRect = dom.backgroundImg.getBoundingClientRect();
         const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
-        const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.left}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
+        const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.top}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
         dom.overlaySvg.style.cssText = commonStyle + `pointer-events: none;`;
         const labelsPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
         dom.labelsContainer.style.cssText = commonStyle + `pointer-events: ${labelsPointerEvents};`;
@@ -709,6 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = document.createElement('div');
             label.className = `mp-label`;
             label.dataset.mpId = mp.id;
+            label.dataset.originalTransform = 'translate(-50%, -50%)';
             let statusClass = '', labelHtml = '', tooltipText = '';
 
             if (mp.type === 'table') {
@@ -768,8 +772,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.ui.selectedMPId) highlightSelection(appState.ui.selectedMPId);
         
         // Reapply current zoom if active
-        if (appState.ui.isZoomActive && appState.ui.currentMPView) {
-            applyCanvasZoom(appState.ui.currentMPView, false);
+        if (appState.ui.isZoomActive) {
+            applyCanvasZoom(appState.ui.canvasZoom, false);
         }
     };
 
@@ -841,11 +845,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const isExistingSchema = !!editorData.originalFileName;
         contentDiv.innerHTML = `
             <div id="editor-schema-controls">
-                <div class="input-group"><label data-i18n="schemaName">${t('schemaName')}</label><input type="text" id="editor-schema-name" class="input-field" value="${editorData.name || ''}" ${isExistingSchema ? 'disabled' : ''}></div>
+                <div class="input-group"><label data-i18n="schemaName">${t('schemaName')}</label><input type="text" id="editor-schema-name" class="input-field" value="${editorData.name || ''}" ${isExistingSchema ? 'readonly' : ''}></div>
                 <div class="input-group"><label data-i18n="schemaVersion">${t('schemaVersion')}</label><input type="text" id="editor-schema-version" class="input-field" value="${editorData.version || ''}"></div>
             </div>
             ${isExistingSchema ? `<button id="editor-delete-schema-btn" class="btn" title="${t('deleteSchema')}">🗑️</button>` : ''}
-            <div id="editor-bg-control"><div class="input-group"><label><span data-i18n="drawingBackground">${t('drawingBackground')}</span></label><span id="editor-bg-filename">${editorData.meta?.backgroundFile || '...'}</span><button id="btn-editor-upload-bg" class="btn btn-secondary">${t('upload')}</button></div></div>
+            <div id="editor-bg-control"><div class="input-group"><label><span data-i18n="drawingBackground">${t('drawingBackground')}</span></label><span id="editor-bg-filename">${editorData.meta.backgroundFile || 'None'}</span></div><button id="btn-editor-upload-bg" class="btn btn-secondary">Upload</button></div>
             <div id="editor-meta-control">
                 <label><span data-i18n="metaLabels">${t('metaLabels')}</span></label>
                 <div class="checkbox-group"><label><input type="checkbox" id="check-show-qr" ${editorData.meta.showQR ? 'checked' : ''}> <span data-i18n="showQR">${t('showQR')}</span></label><label><input type="checkbox" id="check-show-date" ${editorData.meta.showDate ? 'checked' : ''}> <span data-i18n="showDate">${t('showDate')}</span></label></div>
@@ -855,8 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if(isExistingSchema) contentDiv.querySelector('#editor-delete-schema-btn').addEventListener('click', handleDeleteSchema);
         contentDiv.querySelector('#editor-schema-name').addEventListener('input', (e) => { editorData.name = e.target.value; appState.ui.editorIsDirty = true; });
         contentDiv.querySelector('#editor-schema-version').addEventListener('input', (e) => { editorData.version = e.target.value; appState.ui.editorIsDirty = true; });
-        contentDiv.querySelector('#check-show-qr').addEventListener('change', (e) => { editorData.meta.showQR = e.target.checked; if(e.target.checked && !editorData.meta.qrLabelPos) editorData.meta.qrLabelPos = {x: 100, y: 50}; appState.ui.editorIsDirty = true; renderCanvas(); });
-        contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos = {x: 100, y: 80}; appState.ui.editorIsDirty = true; renderCanvas(); });
+        contentDiv.querySelector('#check-show-qr').addEventListener('change', (e) => { editorData.meta.showQR = e.target.checked; if(e.target.checked && !editorData.meta.qrLabelPos) editorData.meta.qrLabelPos={x:100, y:50}; appState.ui.editorIsDirty = true; renderCanvas(); });
+        contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos={x:100, y:80}; appState.ui.editorIsDirty = true; renderCanvas(); });
         contentDiv.querySelector('#btn-editor-upload-bg').addEventListener('click', () => dom.backgroundUploader.click());
         const container = contentDiv.querySelector('#editor-properties-container');
         editorData.points.forEach(mp => renderMPCard(mp, container));
@@ -898,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          <div class="editor-point-header"><span>Arrow ${i+1}</span><button class="editor-icon-btn delete" data-action="delete-arrow">🗑️</button></div>
                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                             <div class="input-group"><label>${t('arrowWidth')}</label><input type="number" class="input-field" data-prop="arrows.${i}.style.width" value="${arrow.style?.width || 2}"></div>
-                            <div class="input-group"><label>${t('arrowColor')}</label><input type="color" class="input-field" data-prop="arrows.${i}.style.color" value="${arrow.style?.color || '#ff9500'}"></div>
+                            <div class="input-group"><label>${t('arrowColor')}</label><input type="color" class="input-field" data-prop="arrows.${i}.style.color" value="${arrow.style?.color || '#007aff'}"></div>
                         </div>
                         <div class="input-group"><label>${t('arrowHead')}</label>
                             <select class="select-field" data-prop="arrows.${i}.style.head">
@@ -914,10 +918,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewControlsHtml = `
             <div class="editor-view-controls">
                 <button class="btn btn-secondary" data-action="set-view">${t('setView')}</button>
-                <button class="btn btn-secondary" data-action="clear-view">${mp.view ? t('clearView') : t('clearView')}</button>
+                <button class="btn btn-secondary" data-action="clear-view" ${!mp.view ? 'disabled' : ''}>${t('clearView')}</button>
             </div>`;
 
-        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><select class="select-field" data-prop="type" style="height:32px; padding: 4px 8px;"><option value="single" ${mp.type==='single'?'selected':''}>Single</option><option value="table" ${mp.type==='table'?'selected':''}>Table</option></select><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name || ''}"></div>${typeHtml}${arrowsHtml}${viewControlsHtml}`;
+        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><select class="select-field editor-point-type" data-prop="type"><option value="single" ${mp.type==='single'?'selected':''}>Single</option><option value="table" ${mp.type==='table'?'selected':''}>Table</option></select><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name}"></div>${typeHtml}${arrowsHtml}${viewControlsHtml}`;
         container.appendChild(card);
 
         card.querySelector('.editor-point-id-input').addEventListener('change', (e) => {
@@ -931,12 +935,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (act === 'delete-mp') { if (confirm(`Delete ${mp.id}?`)) deleteMP(mp.id); }
             else if (act === 'add-arrow') { mp.arrows.push({x1: 400, y1: 300, x2: 500, y2: 300, style: {color: '#ff9500', width: 2, head: 'arrow'}}); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
             else if (act === 'delete-arrow') { mp.arrows.splice(parseInt(e.target.closest('.editor-sub-item').dataset.arrowIndex), 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
-            else if (act === 'add-column') { mp.columns = mp.columns || []; mp.columns.push({name:'New Col', unit:'mm', nominal:0, min:-0.1, max:0.1}); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
-            else if (act === 'delete-column') { mp.columns.splice(parseInt(e.target.closest('.editor-sub-item').dataset.colIndex), 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
+            else if (act === 'add-column') { mp.columns = mp.columns || []; mp.columns.push({name:'New Col', unit:'mm', nominal:0, min:-0.1, max:0.1}); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
+            else if (act === 'delete-column') { mp.columns.splice(parseInt(e.target.closest('.editor-sub-item').dataset.colIndex), 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
             else if (act === 'set-view') {
                 mp.view = { ...appState.ui.canvasZoom };
                 appState.ui.editorIsDirty = true;
                 alert(`View saved for ${mp.id}!\nScale: ${mp.view.scale.toFixed(2)}x`);
+                renderSchemaInspector();
             }
             else if (act === 'clear-view') {
                 mp.view = null;
@@ -962,48 +967,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const onEditorMouseDown = (e) => {
         if (!appState.ui.isEditorOpen) return;
         const target = e.target.closest('.mp-label, .meta-label, circle');
-        if (!target) return;
-        const mpId = target.dataset.mpId;
-        if (mpId) {
-            selectMP(mpId);
-            appState.ui.dragging = { type: target.dataset.handleType || 'label', mp: appState.ui.editorState.points.find(p => p.id === mpId), arrowIndex: parseInt(target.dataset.arrowIndex) };
-        } else if (target.dataset.dragType) {
-             appState.ui.dragging = { type: target.dataset.dragType };
+        
+        if (target) { // User clicked on a draggable item
+            const mpId = target.dataset.mpId;
+            if (mpId) {
+                selectMP(mpId);
+                appState.ui.dragging = { type: target.dataset.handleType || 'label', mp: appState.ui.editorState.points.find(p => p.id === mpId), arrowIndex: parseInt(target.dataset.arrowIndex) };
+            } else if (target.dataset.dragType) {
+                 appState.ui.dragging = { type: target.dataset.dragType };
+            }
+        } else { // User clicked on the background, initiate panning
+            appState.ui.isPanning = true;
+            appState.ui.panStart = { x: e.clientX, y: e.clientY };
+            dom.canvasWrapper.classList.add('is-panning');
         }
-        if (appState.ui.dragging) {
+
+        if (appState.ui.dragging || appState.ui.isPanning) {
             document.addEventListener('mousemove', onEditorMouseMove);
             document.addEventListener('mouseup', onEditorMouseUp);
         }
     };
    
     const onEditorMouseMove = (e) => {
-        if (!appState.ui.dragging) return;
         e.preventDefault();
         appState.ui.editorIsDirty = true;
-        const pt = dom.overlaySvg.createSVGPoint();
-        pt.x = e.clientX;
-        pt.y = e.clientY;
-        const coords = pt.matrixTransform(dom.overlaySvg.getScreenCTM().inverse());
-        const { type, mp, arrowIndex } = appState.ui.dragging;
-        if (type === 'start' || type === 'end') {
-            const arrow = mp.arrows[arrowIndex];
-            if (arrow) {
-                arrow[type === 'start' ? 'x1' : 'x2'] = coords.x;
-                arrow[type === 'start' ? 'y1' : 'y2'] = coords.y;
+
+        if (appState.ui.isPanning) {
+            const dx = e.clientX - appState.ui.panStart.x;
+            const dy = e.clientY - appState.ui.panStart.y;
+            appState.ui.canvasZoom.offsetX += dx / appState.ui.canvasZoom.scale;
+            appState.ui.canvasZoom.offsetY += dy / appState.ui.canvasZoom.scale;
+            appState.ui.panStart = { x: e.clientX, y: e.clientY };
+            applyCanvasZoom(appState.ui.canvasZoom, false);
+        } else if (appState.ui.dragging) {
+            const pt = dom.overlaySvg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            
+            // Correct for the canvas's own transform
+            const svgTransform = dom.overlaySvg.getScreenCTM().inverse();
+            const coords = pt.matrixTransform(svgTransform);
+
+            const { type, mp, arrowIndex } = appState.ui.dragging;
+            if (type === 'start' || type === 'end') {
+                const arrow = mp.arrows[arrowIndex];
+                if (arrow) {
+                    arrow[type === 'start' ? 'x1' : 'x2'] = coords.x;
+                    arrow[type === 'start' ? 'y1' : 'y2'] = coords.y;
+                }
+            } else if (type === 'label') {
+                mp.labelX = coords.x;
+                mp.labelY = coords.y;
+            } else if (type === 'qrLabel') {
+                appState.ui.editorState.meta.qrLabelPos = { x: coords.x, y: coords.y };
+            } else if (type === 'dateLabel') {
+                appState.ui.editorState.meta.dateLabelPos = { x: coords.x, y: coords.y };
             }
-        } else if (type === 'label') {
-            mp.labelX = coords.x;
-            mp.labelY = coords.y;
-        } else if (type === 'qrLabel') {
-            appState.ui.editorState.meta.qrLabelPos = { x: coords.x, y: coords.y };
-        } else if (type === 'dateLabel') {
-            appState.ui.editorState.meta.dateLabelPos = { x: coords.x, y: coords.y };
+            renderCanvas();
         }
-        renderCanvas();
     };
    
     const onEditorMouseUp = () => {
-        appState.ui.dragging = null;
+        if (appState.ui.isPanning) {
+            appState.ui.isPanning = false;
+            dom.canvasWrapper.classList.remove('is-panning');
+        }
+        if (appState.ui.dragging) {
+            appState.ui.dragging = null;
+        }
         document.removeEventListener('mousemove', onEditorMouseMove);
         document.removeEventListener('mouseup', onEditorMouseUp);
     };
@@ -1027,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!appState.ui.isEditorOpen) return;
         const points = appState.ui.editorState.points;
         const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, '')) || 0)) + 1)}`;
-        points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: {width: 2, color: '#ff9500', head: 'arrow'}}]});
+        points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: { color: '#007aff', width: 2, head: 'arrow' }}], view: null });
         appState.ui.editorIsDirty = true;
         renderSchemaInspector();
         selectMP(newId);
@@ -1088,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mp.columns.forEach((col, i) => {
                         const val = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input[data-col-index="${i}"]`).value;
                         const num = parseFloat(val.replace(',', '.'));
-                        if (isNaN(num) || num < col.min || num > col.max) overallStatus = 'NOK';
+                        if (val !== '' && (isNaN(num) || num < col.min || num > col.max)) overallStatus = 'NOK';
                         Object.assign(mpData, {
                             [`${mp.id}_${col.name}_Value`]: val,
                             [`${mp.id}_${col.name}_Nominal`]: col.nominal,
@@ -1099,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const val = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input`).value;
                     const num = parseFloat(val.replace(',', '.'));
-                    if (isNaN(num) || num < mp.min || num > mp.max) overallStatus = 'NOK';
+                    if (val !== '' && (isNaN(num) || num < mp.min || num > mp.max)) overallStatus = 'NOK';
                     Object.assign(mpData, {
                         [`${mp.id}_Value`]: val,
                         [`${mp.id}_Nominal`]: mp.nominal,
@@ -1165,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0, nw, nh);
                 URL.revokeObjectURL(bgUrl);
                 const cRec = recordData;
-                const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${cRec.columns.findIndex(c=>c.name===colName)}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value || '');
+                const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${colName}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value);
                 cMap.points.forEach(mp => {
                     (mp.arrows||[{x1:mp.x1,y1:mp.y1,x2:mp.x2,y2:mp.y2,style:mp.style}]).forEach(a => {
                         if(!a.x1) return;
@@ -1196,8 +1227,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let st='OK', sCol='#34c759', valTxt='';
                     if(mp.type==='table') {
                         let any=false, allOk=true;
-                        (mp.columns||[]).forEach(c => {
-                            const v=getVal(mp.id, c.name);
+                        (mp.columns||[]).forEach((c, i) => {
+                            const v = getVal(mp.id, i);
                             if(v && v.trim()!=='') {
                                 any=true;
                                 const n=parseFloat(v.replace(',','.'));
@@ -1956,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
    
     const filterAnalysisData = () => {
-        const df = dom.analysisDateFrom.valueAsDate, dt = dom.analysisDateTo.valueAsDate, qr = dom.analysisQrSearch.value.toLowerCase(), schemas = [...dom.analysisSchemasList.querySelectorAll('input:checked')].map(el => el.value);
+        const df = dom.analysisDateFrom.valueAsDate, dt = dom.analysisDateTo.valueAsDate, qr = dom.analysisQrSearch.value.toLowerCase(), schemas = [...dom.analysisSchemasList.querySelectorAll('input:checked')].map(e=>e.value);
         appState.data.analysisData = appState.data.db.filter(r => {
             const rd = new Date(r.Timestamp);
             return (!df || rd >= df) && (!dt || rd < new Date(dt.getTime() + 86400000)) && (!qr || r.QRCode.toLowerCase().includes(qr)) && schemas.includes(r.SchemaName);
@@ -1967,7 +1998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const h = appState.data.analysisData.reduce((acc, r) => new Set([...acc, ...Object.keys(r)]), new Set());
         dom.analysisMpsList.innerHTML = [...h].filter(k => k.endsWith('_Value')).sort().map(k => {
             const mp = k.replace('_Value','');
-            return `<div class="mp-selection-item"><label><input type="checkbox" name="mp" value="${mp}" checked data-mp="${mp}"> ${mp}</label><input type="checkbox" class="mp-tolerance-toggle" data-mp-tol="${mp}" title="Show Tolerance"></div>`;
+            return `<div class="mp-selection-item"><label><input type="checkbox" name="mp" value="${mp}" checked data-mp="${mp}"> ${mp}</label><input type="checkbox" class="mp-tolerance-toggle" data-mp="${mp}"> Tol.</div>`;
         }).join('');
         dom.analysisMpsList.querySelectorAll('input').forEach(el => el.addEventListener('change', generateChart));
     };
@@ -1994,7 +2025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mode === 'trend') {
             data = appState.data.analysisData.filter(r => !appState.ui.hiddenRecordIds.has(r.RecordId));
             labels = data.map(r => r.QRCode);
-            const mps = [...dom.analysisMpsList.querySelectorAll('input[name="mp"]:checked')].map(e=>e.value), tols = [...dom.analysisMpsList.querySelectorAll('.mp-tolerance-toggle:checked')].map(e=>e.dataset.mpTol);
+            const mps = [...dom.analysisMpsList.querySelectorAll('input[name="mp"]:checked')].map(e=>e.value), tols = [...dom.analysisMpsList.querySelectorAll('.mp-tolerance-toggle:checked')].map(e=>e.dataset.mp);
             mps.forEach((mp,i) => {
                 const col = ['#007aff','#ff9500','#34c759'][i%3];
                 datasets.push({
@@ -2163,9 +2194,6 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.btnSaveMap.addEventListener('click', saveMap);
     dom.canvasWrapper.addEventListener('mousedown', onEditorMouseDown);
     dom.canvasWrapper.addEventListener('wheel', onEditorZoomWheel, { passive: false });
-    dom.canvasWrapper.addEventListener('mousedown', onEditorZoomMouseDown);
-    document.addEventListener('mousemove', onEditorZoomMouseMove);
-    document.addEventListener('mouseup', onEditorZoomMouseUp);
     dom.btnSave.addEventListener('click', saveAndExport);
     dom.qrCodeInput.addEventListener('input', () => renderCanvas());
     dom.btnResetView.addEventListener('click', () => resetCanvasView());
