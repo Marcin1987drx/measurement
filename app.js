@@ -147,6 +147,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectMP = (id) => {
         appState.ui.selectedMPId = id;
         highlightSelection(id);
+        
+        // Apply saved view if in normal mode (not editor) and MP has a view
+        if (!appState.ui.isEditorOpen && appState.data.currentMap) {
+            const mp = appState.data.currentMap.points.find(p => p.id === id);
+            if (mp && mp.view) {
+                applyCanvasZoom(mp.view);
+            }
+        }
     };
 
     const highlightSelection = (id) => {
@@ -237,7 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
         elementsToScale.forEach(el => {
             // We store original transform in a data attribute to avoid conflicts
             const originalTransform = el.dataset.originalTransform || 'translate(-50%, -50%)';
-            el.style.transform = `${originalTransform} scale(${1/scale})`;
+            el.dataset.originalTransform = originalTransform;
+            // Apply scale first, then translation so translation is not affected by scale
+            el.style.transform = `scale(${1/scale}) ${originalTransform}`;
         });
         
         const svgHandles = dom.overlaySvg.querySelectorAll('circle');
@@ -540,11 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         selectMP(mp.id);
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                         if (label) label.classList.add('is-blinking');
-                        
-                        // Apply MP view zoom
-                        if (mp.view) {
-                            applyCanvasZoom(mp.view);
-                        }
+                        // View is now applied in selectMP function
                     });
                     input.addEventListener('blur', () => {
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
@@ -569,11 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     selectMP(mp.id);
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                     if (label) label.classList.add('is-blinking');
-                    
-                    // Apply MP view zoom
-                    if (mp.view) {
-                        applyCanvasZoom(mp.view);
-                    }
+                    // View is now applied in selectMP function
                 });
                 input.addEventListener('blur', () => {
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
@@ -638,10 +640,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgRect = dom.backgroundImg.getBoundingClientRect();
         const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
         const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.left}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
-        const svgPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
-        dom.overlaySvg.style.cssText = commonStyle + `pointer-events: ${svgPointerEvents};`;
-        const labelsPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
-        dom.labelsContainer.style.cssText = commonStyle + `pointer-events: ${labelsPointerEvents};`;
+        // SVG and labels container have pointer-events set in CSS
+        // SVG has pointer-events: none, but circles/lines inside have pointer-events: auto
+        // Labels container has pointer-events: none, but labels themselves have pointer-events: auto
+        dom.overlaySvg.style.cssText = commonStyle;
+        dom.labelsContainer.style.cssText = commonStyle;
         fitLabelsToView();
     };
 
@@ -676,6 +679,10 @@ document.addEventListener('DOMContentLoaded', () => {
             arrowsToRender.forEach((arrow, index) => {
                 if (!arrow.x1) return;
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                if (isEditor) {
+                    // Add data attributes for editor mode so we can update arrows during drag
+                    Object.assign(line.dataset, { mpId: mp.id, arrowIndex: index });
+                }
                 line.setAttribute('x1', arrow.x1);
                 line.setAttribute('y1', arrow.y1);
                 line.setAttribute('x2', arrow.x2);
@@ -930,11 +937,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const act = e.target.dataset.action; if (!act) return;
             if (act === 'delete-mp') { if (confirm(`Delete ${mp.id}?`)) deleteMP(mp.id); }
             else if (act === 'add-arrow') { mp.arrows.push({x1: 400, y1: 300, x2: 500, y2: 300, style: {color: '#ff9500', width: 2, head: 'arrow'}}); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
-            else if (act === 'delete-arrow') { mp.arrows.splice(parseInt(e.target.closest('.editor-sub-item').dataset.arrowIndex), 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
+            else if (act === 'delete-arrow') { const idx = parseInt(e.target.closest('.editor-sub-item')?.dataset.arrowIndex || '0', 10); if (!isNaN(idx)) mp.arrows.splice(idx, 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
             else if (act === 'add-column') { mp.columns = mp.columns || []; mp.columns.push({name:'New Col', unit:'mm', nominal:0, min:-0.1, max:0.1}); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
-            else if (act === 'delete-column') { mp.columns.splice(parseInt(e.target.closest('.editor-sub-item').dataset.colIndex), 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
+            else if (act === 'delete-column') { const idx = parseInt(e.target.closest('.editor-sub-item')?.dataset.colIndex || '0', 10); if (!isNaN(idx)) mp.columns.splice(idx, 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
             else if (act === 'set-view') {
-                mp.view = { ...appState.ui.canvasZoom };
+                // Save the current zoom state as the view for this MP
+                mp.view = { 
+                    scale: appState.ui.canvasZoom.scale, 
+                    offsetX: appState.ui.canvasZoom.offsetX, 
+                    offsetY: appState.ui.canvasZoom.offsetY 
+                };
                 appState.ui.editorIsDirty = true;
                 alert(`View saved for ${mp.id}!\nScale: ${mp.view.scale.toFixed(2)}x`);
                 renderSchemaInspector();
@@ -962,15 +974,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const onEditorMouseDown = (e) => {
         if (!appState.ui.isEditorOpen) return;
-        const target = e.target.closest('.mp-label, .meta-label, circle');
+        
+        // Check if clicked element is a circle (arrow handle), label, or meta label
+        // Use closest() to handle clicks on child elements inside labels
+        let target = e.target.closest('.mp-label, .meta-label, circle');
+        
+        // If closest didn't find anything, check if the target itself is one of these
+        if (!target) {
+            if (e.target.tagName === 'circle' || e.target.classList.contains('mp-label') || e.target.classList.contains('meta-label')) {
+                target = e.target;
+            }
+        }
+        
+        // Also check if we clicked inside a label by checking parent elements
+        if (!target) {
+            let el = e.target;
+            while (el && el !== dom.labelsContainer && el !== dom.canvasWrapper) {
+                if (el.classList && (el.classList.contains('mp-label') || el.classList.contains('meta-label'))) {
+                    target = el;
+                    break;
+                }
+                el = el.parentElement;
+            }
+        }
         
         if (target) { // User clicked on a draggable item
-            const mpId = target.dataset.mpId;
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // For labels, always get the actual label element (not child divs)
+            let labelElement = null;
+            if (target.classList.contains('mp-label')) {
+                labelElement = target;
+            } else if (target.closest('.mp-label')) {
+                labelElement = target.closest('.mp-label');
+            }
+            
+            // Check for mpId - get it from the label element if we found one
+            const mpId = labelElement ? (labelElement.dataset?.mpId || labelElement.getAttribute('data-mp-id')) : (target.dataset?.mpId || target.getAttribute('data-mp-id'));
+            
             if (mpId) {
                 selectMP(mpId);
-                appState.ui.dragging = { type: target.dataset.handleType || 'label', mp: appState.ui.editorState.points.find(p => p.id === mpId), arrowIndex: parseInt(target.dataset.arrowIndex) };
-            } else if (target.dataset.dragType) {
-                 appState.ui.dragging = { type: target.dataset.dragType };
+                const arrowIndex = target.dataset?.arrowIndex !== undefined ? parseInt(target.dataset.arrowIndex, 10) : undefined;
+                const handleType = target.dataset?.handleType;
+                
+                // Determine drag type: if it's a label (not an arrow handle), set type to 'label'
+                let dragType = handleType;
+                if (!dragType && labelElement) {
+                    dragType = 'label';
+                }
+                
+                const foundMp = appState.ui.editorState.points.find(p => p.id === mpId);
+                if (foundMp) {
+                    appState.ui.dragging = { 
+                        type: dragType || 'label', 
+                        mp: foundMp, 
+                        arrowIndex: isNaN(arrowIndex) ? undefined : arrowIndex 
+                    };
+                }
+            } else if (target.dataset?.dragType) {
+                appState.ui.dragging = { type: target.dataset.dragType };
+            } else if (labelElement) {
+                // Fallback: if it's a label but no mpId, try to find mp by checking the label's text content
+                const labelText = labelElement.textContent || '';
+                const mpMatch = labelText.match(/(MP\d+)/);
+                if (mpMatch) {
+                    const foundMp = appState.ui.editorState.points.find(p => p.id === mpMatch[1]);
+                    if (foundMp) {
+                        appState.ui.dragging = { type: 'label', mp: foundMp };
+                    }
+                }
+            } else if (target.classList.contains('meta-label') || target.closest('.meta-label')) {
+                const metaLabelEl = target.classList.contains('meta-label') ? target : target.closest('.meta-label');
+                const dragType = metaLabelEl?.dataset?.dragType;
+                if (dragType) {
+                    appState.ui.dragging = { type: dragType };
+                }
             }
         } else { // User clicked on the background, initiate panning
             appState.ui.isPanning = true;
@@ -985,7 +1064,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
    
     const onEditorMouseMove = (e) => {
+        if (!appState.ui.dragging && !appState.ui.isPanning) return;
+        
         e.preventDefault();
+        e.stopPropagation();
         appState.ui.editorIsDirty = true;
 
         if (appState.ui.isPanning) {
@@ -997,30 +1079,111 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.ui.panStart = { x: e.clientX, y: e.clientY };
             applyCanvasZoom(appState.ui.canvasZoom, false);
         } else if (appState.ui.dragging) {
-            const pt = dom.overlaySvg.createSVGPoint();
-            pt.x = e.clientX;
-            pt.y = e.clientY;
-            
-            // Correct for the canvas's own transform
-            const svgTransform = dom.labelsContainer.getScreenCTM().inverse();
-            const coords = pt.matrixTransform(svgTransform);
+            try {
+                const { type, mp, arrowIndex } = appState.ui.dragging;
+                
+                if (type === 'start' || type === 'end') {
+                    // For arrow handles (circles in SVG), use SVG coordinate system
+                    const pt = dom.overlaySvg.createSVGPoint();
+                    pt.x = e.clientX;
+                    pt.y = e.clientY;
+                    const svgTransform = dom.overlaySvg.getScreenCTM()?.inverse();
+                    if (!svgTransform) return;
+                    const coords = pt.matrixTransform(svgTransform);
+                    
+                    const arrow = mp.arrows[arrowIndex];
+                    if (arrow) {
+                        arrow[type === 'start' ? 'x1' : 'x2'] = coords.x;
+                        arrow[type === 'start' ? 'y1' : 'y2'] = coords.y;
+                    }
+                    // Update arrow visually without full render
+                    const handle = dom.overlaySvg.querySelector(`circle[data-mp-id="${mp.id}"][data-arrow-index="${arrowIndex}"][data-handle-type="${type}"]`);
+                    if (handle) {
+                        handle.setAttribute('cx', coords.x);
+                        handle.setAttribute('cy', coords.y);
+                    }
+                    const line = dom.overlaySvg.querySelector(`line[data-mp-id="${mp.id}"][data-arrow-index="${arrowIndex}"]`);
+                    if (line) {
+                        if (type === 'start') {
+                            line.setAttribute('x1', coords.x);
+                            line.setAttribute('y1', coords.y);
+                        } else {
+                            line.setAttribute('x2', coords.x);
+                            line.setAttribute('y2', coords.y);
+                        }
+                    }
+                } else if (type === 'label' || type === 'qrLabel' || type === 'dateLabel') {
+                    // Use EXACT same approach as arrows - convert cursor to viewBox coordinates
+                    const pt = dom.overlaySvg.createSVGPoint();
+                    pt.x = e.clientX;
+                    pt.y = e.clientY;
+                    const svgTransform = dom.overlaySvg.getScreenCTM()?.inverse();
+                    if (!svgTransform) return;
+                    const coords = pt.matrixTransform(svgTransform);
+                    
+                    // Clamp coordinates to valid viewBox range
+                    const viewBoxX = Math.max(0, Math.min(VIEWBOX_WIDTH, coords.x));
+                    const viewBoxY = Math.max(0, Math.min(VIEWBOX_HEIGHT, coords.y));
 
-            const { type, mp, arrowIndex } = appState.ui.dragging;
-            if (type === 'start' || type === 'end') {
-                const arrow = mp.arrows[arrowIndex];
-                if (arrow) {
-                    arrow[type === 'start' ? 'x1' : 'x2'] = coords.x;
-                    arrow[type === 'start' ? 'y1' : 'y2'] = coords.y;
+                    if (type === 'label' && mp) {
+                        // Save viewBox coordinates (same as arrows)
+                        mp.labelX = viewBoxX;
+                        mp.labelY = viewBoxY;
+                        // Don't update position during drag - let fitLabelsToView handle it
+                    } else if (type === 'qrLabel') {
+                        appState.ui.editorState.meta.qrLabelPos = { x: viewBoxX, y: viewBoxY };
+                    } else if (type === 'dateLabel') {
+                        appState.ui.editorState.meta.dateLabelPos = { x: viewBoxX, y: viewBoxY };
+                    }
+                    
+                    // Update label position immediately using fitLabelsToView logic
+                    const containerRect = dom.labelsContainer.getBoundingClientRect();
+                    if (containerRect.width > 0) {
+                        const scaleX = containerRect.width / VIEWBOX_WIDTH;
+                        const scaleY = containerRect.height / VIEWBOX_HEIGHT;
+                        
+                        if (type === 'label' && mp) {
+                            const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
+                            if (label) {
+                                label.style.left = `${viewBoxX * scaleX}px`;
+                                label.style.top = `${viewBoxY * scaleY}px`;
+                                // Preserve CSS transform
+                                const { scale } = appState.ui.canvasZoom;
+                            const originalTransform = label.dataset.originalTransform || 'translate(-50%, -50%)';
+                            label.dataset.originalTransform = originalTransform;
+                            label.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                                label.style.display = '';
+                                label.style.visibility = 'visible';
+                                label.style.opacity = '1';
+                            }
+                        } else if (type === 'qrLabel') {
+                            const qrLabel = dom.labelsContainer.querySelector('[data-drag-type="qrLabel"]');
+                            if (qrLabel) {
+                                qrLabel.style.left = `${viewBoxX * scaleX}px`;
+                                qrLabel.style.top = `${viewBoxY * scaleY}px`;
+                                const { scale } = appState.ui.canvasZoom;
+                            const originalTransform = qrLabel.dataset.originalTransform || 'translate(-50%, -50%)';
+                            qrLabel.dataset.originalTransform = originalTransform;
+                            qrLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                            }
+                        } else if (type === 'dateLabel') {
+                            const dateLabel = dom.labelsContainer.querySelector('[data-drag-type="dateLabel"]');
+                            if (dateLabel) {
+                                dateLabel.style.left = `${viewBoxX * scaleX}px`;
+                                dateLabel.style.top = `${viewBoxY * scaleY}px`;
+                                const { scale } = appState.ui.canvasZoom;
+                            const originalTransform = dateLabel.dataset.originalTransform || 'translate(-50%, -50%)';
+                            dateLabel.dataset.originalTransform = originalTransform;
+                            dateLabel.style.transform = `scale(${1/scale}) ${originalTransform}`;
+                            }
+                        }
+                    }
                 }
-            } else if (type === 'label') {
-                mp.labelX = coords.x;
-                mp.labelY = coords.y;
-            } else if (type === 'qrLabel') {
-                appState.ui.editorState.meta.qrLabelPos = { x: coords.x, y: coords.y };
-            } else if (type === 'dateLabel') {
-                appState.ui.editorState.meta.dateLabelPos = { x: coords.x, y: coords.y };
+                // Don't call renderCanvas() during drag - it causes flickering and position jumps
+                // We'll call it on mouseup instead
+            } catch (err) {
+                console.error('Error in onEditorMouseMove:', err);
             }
-            renderCanvas();
         }
     };
    
@@ -1031,6 +1194,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (appState.ui.dragging) {
             appState.ui.dragging = null;
+            
+            // Call fitLabelsToView after drag to position labels correctly
+            // Use requestAnimationFrame to ensure DOM has updated
+            requestAnimationFrame(() => {
+                fitLabelsToView();
+            });
         }
         document.removeEventListener('mousemove', onEditorMouseMove);
         document.removeEventListener('mouseup', onEditorMouseUp);
@@ -1053,8 +1222,10 @@ document.addEventListener('DOMContentLoaded', () => {
    
     const addMP = () => {
         if (!appState.ui.isEditorOpen) return;
+        // Reset view to normal before adding new MP so coordinates are correct
+        resetCanvasView(false);
         const points = appState.ui.editorState.points;
-        const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, '')) || 0)) + 1)}`;
+        const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, ''), 10) || 0)) + 1)}`;
         points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: { color: '#007aff', width: 2, head: 'arrow' }}], view: null });
         appState.ui.editorIsDirty = true;
         renderSchemaInspector();
@@ -1080,10 +1251,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!name || !version) { alert(t('schemaInfoMissing')); return; }
         const fn = `${name.trim()}_v${version.trim()}`;
         try {
-            const s = { ...appState.ui.editorState };
+            // Deep clone to ensure views are included
+            const s = JSON.parse(JSON.stringify(appState.ui.editorState));
             delete s.name;
             delete s.version;
             delete s.originalFileName;
+            // Ensure views are preserved in points
+            if (s.points) {
+                s.points = s.points.map(mp => ({
+                    ...mp,
+                    view: mp.view || null  // Explicitly include view (even if null)
+                }));
+            }
             await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'maps'), `${fn}.map.json`), JSON.stringify(s, null, 2));
             if (appState.ui.editorState.originalFileName && appState.ui.editorState.originalFileName !== fn) {
                 await (await getOrCreateDir(appState.projectRootHandle, 'maps')).removeEntry(`${appState.ui.editorState.originalFileName}.map.json`);
@@ -1114,7 +1293,9 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.data.currentMap.points.forEach(mp => {
                 if (mp.type === 'table') {
                     mp.columns.forEach((col, i) => {
-                        const val = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input[data-col-index="${i}"]`).value;
+                        const inputEl = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input[data-col-index="${i}"]`);
+                        if (!inputEl) return;
+                        const val = inputEl.value;
                         const num = parseFloat(val.replace(',', '.'));
                         if (val !== '' && (isNaN(num) || num < col.min || num > col.max)) overallStatus = 'NOK';
                         Object.assign(mpData, {
@@ -1125,7 +1306,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     });
                 } else {
-                    const val = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input`).value;
+                    const inputEl = document.querySelector(`.mp-row[data-mp-id="${mp.id}"] input`);
+                    if (!inputEl) return;
+                    const val = inputEl.value;
                     const num = parseFloat(val.replace(',', '.'));
                     if (val !== '' && (isNaN(num) || num < mp.min || num > mp.max)) overallStatus = 'NOK';
                     Object.assign(mpData, {
@@ -1138,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const [sn, sv] = dom.mapSelect.value.split('_v');
             const rec = {
-                RecordId: `${new Date().toISOString().replace(/[:.]/g, '-')}_${Math.random().toString(36).substr(2, 5)}`,
+                RecordId: `${new Date().toISOString().replace(/[:.]/g, '-')}_${Math.random().toString(36).substring(2, 7)}`,
                 Timestamp: new Date().toISOString(),
                 QRCode: qr,
                 SchemaName: sn,
@@ -1838,7 +2021,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleDbColumnDragStart = (e) => {
-        appState.ui.dbDraggedColumnIndex = parseInt(e.target.dataset.columnIndex);
+        appState.ui.dbDraggedColumnIndex = parseInt(e.target.dataset.columnIndex, 10);
         e.target.classList.add('dragging');
     };
     
@@ -1847,7 +2030,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const fromIndex = appState.ui.dbDraggedColumnIndex;
         const toTh = e.target.closest('th.draggable');
         if (!toTh) return;
-        const toIndex = parseInt(toTh.dataset.columnIndex);
+        const toIndex = parseInt(toTh.dataset.columnIndex, 10);
 
         document.querySelectorAll('th.drag-over').forEach(th => th.classList.remove('drag-over'));
         
@@ -2190,6 +2373,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.editorAddMpBtn.addEventListener('click', addMP);
     dom.btnSaveMap.addEventListener('click', saveMap);
     dom.canvasWrapper.addEventListener('mousedown', onEditorMouseDown);
+    // Also attach to SVG and labels container to catch events on their children
+    dom.overlaySvg.addEventListener('mousedown', onEditorMouseDown);
+    dom.labelsContainer.addEventListener('mousedown', onEditorMouseDown);
     dom.canvasWrapper.addEventListener('wheel', onEditorZoomWheel, { passive: false });
     dom.btnSave.addEventListener('click', saveAndExport);
     dom.qrCodeInput.addEventListener('input', () => renderCanvas());
