@@ -321,14 +321,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Draw viewport rectangle
         const { scale, offsetX, offsetY } = appState.ui.canvasZoom;
         const mainRect = dom.canvasWrapper.getBoundingClientRect();
-        const viewWidth = mainRect.width / scale;
-        const viewHeight = mainRect.height / scale;
-
-        const minimapScaleX = 150 / (mainRect.width / scale);
-        const minimapScaleY = 100 / (mainRect.height / scale);
-
-        const rectWidth = 150 / scale;
-        const rectHeight = 100 / scale;
+        
+        const rectWidth = (mainRect.width / scale) * (150 / mainRect.width);
+        const rectHeight = (mainRect.height / scale) * (100 / mainRect.height);
         const rectX = -offsetX * (150 / mainRect.width);
         const rectY = -offsetY * (100 / mainRect.height);
 
@@ -351,8 +346,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let newScale = oldScale * delta;
         newScale = Math.max(0.5, Math.min(5, newScale));
         
-        const newOffsetX = appState.ui.canvasZoom.offsetX * (newScale / oldScale) + (x - rect.width / 2) * (1 - newScale / oldScale);
-        const newOffsetY = appState.ui.canvasZoom.offsetY * (newScale / oldScale) + (y - rect.height / 2) * (1 - newScale / oldScale);
+        const newOffsetX = appState.ui.canvasZoom.offsetX - (x - rect.width / 2) * (newScale / oldScale - 1);
+        const newOffsetY = appState.ui.canvasZoom.offsetY - (y - rect.height / 2) * (newScale / oldScale - 1);
 
         appState.ui.canvasZoom.scale = newScale;
         appState.ui.canvasZoom.offsetX = newOffsetX;
@@ -642,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dom.backgroundImg.src || !dom.backgroundImg.complete || dom.backgroundImg.naturalWidth === 0) return;
         const imgRect = dom.backgroundImg.getBoundingClientRect();
         const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
-        const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.top}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
+        const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.left}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
         dom.overlaySvg.style.cssText = commonStyle + `pointer-events: none;`;
         const labelsPointerEvents = appState.ui.isEditorOpen ? 'auto' : 'none';
         dom.labelsContainer.style.cssText = commonStyle + `pointer-events: ${labelsPointerEvents};`;
@@ -995,8 +990,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.ui.isPanning) {
             const dx = e.clientX - appState.ui.panStart.x;
             const dy = e.clientY - appState.ui.panStart.y;
-            appState.ui.canvasZoom.offsetX += dx / appState.ui.canvasZoom.scale;
-            appState.ui.canvasZoom.offsetY += dy / appState.ui.canvasZoom.scale;
+            // No division by scale needed here as we are moving the whole view
+            appState.ui.canvasZoom.offsetX += dx;
+            appState.ui.canvasZoom.offsetY += dy;
             appState.ui.panStart = { x: e.clientX, y: e.clientY };
             applyCanvasZoom(appState.ui.canvasZoom, false);
         } else if (appState.ui.dragging) {
@@ -1005,7 +1001,7 @@ document.addEventListener('DOMContentLoaded', () => {
             pt.y = e.clientY;
             
             // Correct for the canvas's own transform
-            const svgTransform = dom.overlaySvg.getScreenCTM().inverse();
+            const svgTransform = dom.labelsContainer.getScreenCTM().inverse();
             const coords = pt.matrixTransform(svgTransform);
 
             const { type, mp, arrowIndex } = appState.ui.dragging;
