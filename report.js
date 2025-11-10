@@ -230,24 +230,6 @@ function getElementContent(type) {
         ? reportState.project.records[0] 
         : null;
     
-    // Build measurement table HTML
-    let measurementTableHtml = '<div class="element-field">📋 Measurement Table</div>';
-    if (currentRecord && currentRecord.measurements && currentRecord.measurements.length > 0) {
-        measurementTableHtml = '<table style="width: 100%; font-size: 10px; border-collapse: collapse;">';
-        measurementTableHtml += '<tr><th>MP ID</th><th>Value</th><th>Min</th><th>Max</th><th>Status</th></tr>';
-        currentRecord.measurements.forEach(m => {
-            const statusIcon = m.Status === 'OK' ? '✅' : '❌';
-            measurementTableHtml += `<tr>
-                <td>${m.MP_ID}</td>
-                <td>${m.Value} ${m.Unit}</td>
-                <td>${m.Min}</td>
-                <td>${m.Max}</td>
-                <td>${statusIcon} ${m.Status}</td>
-            </tr>`;
-        });
-        measurementTableHtml += '</table>';
-    }
-    
     const templates = {
         text: '<div class="element-text">Text Block</div>',
         title: '<div class="element-title">Title</div>',
@@ -261,7 +243,9 @@ function getElementContent(type) {
         schemaVersion: `<div class="element-field"><strong>Version:</strong> ${currentRecord ? currentRecord.schemaVersion : '1.0'}</div>`,
         qrCode: `<div class="element-field">🔲 ${currentRecord ? currentRecord.qrCode : 'QR Code'}</div>`,
         status: `<div class="element-field">${currentRecord && currentRecord.overallStatus === 'OK' ? '✅' : '❌'} Status: ${currentRecord ? currentRecord.overallStatus : 'OK'}</div>`,
-        table: measurementTableHtml,
+        table: currentRecord && currentRecord.measurements && currentRecord.measurements.length > 0 
+            ? renderMeasurementTable(currentRecord.measurements)
+            : '<div class="element-field">📋 Measurement Table</div>',
         chart: '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
         vizOverview: '<div class="element-field">🌅 Overview Image</div>',
@@ -271,6 +255,45 @@ function getElementContent(type) {
     };
     // Only return content if type is in the allowed templates (prevents XSS)
     return templates[type] || '<div class="element-field">Unknown Element</div>';
+}
+
+// Render measurement table with full columns
+function renderMeasurementTable(measurements) {
+    if (!measurements || measurements.length === 0) {
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📋 No measurements available</div>';
+    }
+    
+    let html = '<div style="overflow:auto;max-height:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="background:var(--bg-tertiary);font-weight:bold;position:sticky;top:0;">';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:left;min-width:60px;">MP ID</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:left;min-width:100px;">Name</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:right;min-width:60px;">Value</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:center;min-width:40px;">Unit</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:right;min-width:60px;">Nominal</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:right;min-width:50px;">Min</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:right;min-width:50px;">Max</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:center;min-width:70px;">Status</th>';
+    html += '</tr></thead><tbody>';
+    
+    measurements.forEach((m, index) => {
+        const statusIcon = m.Status === 'OK' ? '✅' : '❌';
+        const statusColor = m.Status === 'OK' ? '#34c759' : '#ff3b30';
+        const rowBg = index % 2 === 0 ? 'var(--bg-secondary)' : 'transparent';
+        
+        html += `<tr style="background:${rowBg};">`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;font-family:monospace;font-weight:600;">${m.MP_ID}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;">${m.Name || m.MP_ID}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;font-weight:bold;color:var(--text-primary);">${m.Value}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;font-size:10px;color:var(--text-secondary);">${m.Unit}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:var(--text-secondary);">${m.Nominal}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff9500;">${m.Min}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff3b30;">${m.Max}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;color:${statusColor};font-weight:bold;font-size:12px;">${statusIcon} ${m.Status}</td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table></div>';
+    return html;
 }
 
 function getSelectedElement() {

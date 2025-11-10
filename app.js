@@ -2326,31 +2326,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: appState.projectRootHandle.name,
                 lastAccess: Date.now(),
                 records: appState.data.db.map(record => {
-                    // Extract measurements from record
                     const measurements = [];
+                    
+                    // Find all MP fields by looking for _Value columns
                     Object.keys(record).forEach(key => {
                         if (key.endsWith('_Value') && record[key]) {
                             const mpId = key.replace('_Value', '');
-                            const minKey = `${mpId}_Min`;
-                            const maxKey = `${mpId}_Max`;
-                            const nominalKey = `${mpId}_Nominal`;
+                            
+                            // Get ALL related fields for this MP
+                            const value = record[`${mpId}_Value`];
+                            const min = record[`${mpId}_Min`];
+                            const max = record[`${mpId}_Max`];
+                            const nominal = record[`${mpId}_Nominal`];
+                            const unit = record[`${mpId}_Unit`];
+                            const name = record[`${mpId}_Name`];
                             
                             // Determine status
-                            const value = parseFloat(record[key].replace(',', '.'));
-                            const min = parseFloat(record[minKey]?.replace(',', '.'));
-                            const max = parseFloat(record[maxKey]?.replace(',', '.'));
+                            const valueNum = parseFloat((value || '').toString().replace(',', '.'));
+                            const minNum = parseFloat((min || '').toString().replace(',', '.'));
+                            const maxNum = parseFloat((max || '').toString().replace(',', '.'));
+                            
                             let status = 'OK';
-                            if (!isNaN(value) && !isNaN(min) && !isNaN(max)) {
-                                status = (value >= min && value <= max) ? 'OK' : 'NOK';
+                            if (!isNaN(valueNum) && !isNaN(minNum) && !isNaN(maxNum)) {
+                                status = (valueNum >= minNum && valueNum <= maxNum) ? 'OK' : 'NOK';
                             }
                             
                             measurements.push({
                                 MP_ID: mpId,
-                                Value: record[key],
-                                Unit: 'mm', // Default unit
-                                Min: record[minKey] || '',
-                                Max: record[maxKey] || '',
-                                Nominal: record[nominalKey] || '',
+                                Name: name || mpId,
+                                Value: value,
+                                Unit: unit || 'mm',
+                                Min: min || '',
+                                Max: max || '',
+                                Nominal: nominal || '',
                                 Status: status
                             });
                         }
@@ -2362,15 +2370,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         measurementTime: record.Timestamp ? new Date(record.Timestamp).toTimeString().split(' ')[0] : '',
                         schemaName: record.SchemaName || '',
                         schemaVersion: record.SchemaVersion || '',
-                        inspector: 'Inspector', // TODO: Add inspector field to schema
+                        inspector: 'Inspector',
                         overallStatus: record.OverallStatus || 'OK',
+                        comment: record.Comment || '',
                         measurements: measurements
                     };
                 })
             };
             
             localStorage.setItem('measurementProject', JSON.stringify(projectData));
-            console.log(`✅ Project saved to localStorage: ${projectData.name} (${projectData.records.length} records)`);
+            console.log(`✅ Project saved to localStorage: ${projectData.name} (${projectData.records.length} records, ${projectData.records[0]?.measurements?.length || 0} MPs)`);
             
         } catch (e) {
             console.error('Error selecting project folder:', e);
@@ -2522,22 +2531,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (projectDataStr) {
                 const projectData = JSON.parse(projectDataStr);
                 
-                // Clear existing content and set project name
+                // Clear any existing content first to prevent duplicates
                 dom.projectFolderName.innerHTML = '';
-                const projectNameText = document.createTextNode(projectData.name || 'Unknown Project');
-                dom.projectFolderName.appendChild(projectNameText);
+                
+                // Add project name as text node (safe from XSS)
+                dom.projectFolderName.appendChild(document.createTextNode(projectData.name || 'Unknown Project'));
+                
                 dom.btnProjectFolder.classList.remove('needs-action');
                 
                 const lastAccessDate = new Date(projectData.lastAccess).toLocaleString();
                 console.log(`📁 Last project loaded: ${projectData.name} (last access: ${lastAccessDate})`);
                 
-                // Show refresh hint
+                // Add hint with unique class to prevent duplicates
                 const hint = document.createElement('small');
+                hint.className = 'last-access-hint';
                 hint.textContent = ` (Last accessed: ${lastAccessDate})`;
                 hint.style.color = 'var(--text-secondary)';
                 hint.style.fontSize = '0.8em';
                 hint.style.marginLeft = '8px';
                 dom.projectFolderName.appendChild(hint);
+                
+                // Add helpful message about re-selecting folder
+                const infoIcon = document.createElement('span');
+                infoIcon.textContent = ' ℹ️';
+                infoIcon.title = 'To access database and maps, please re-select the project folder';
+                infoIcon.style.cursor = 'help';
+                dom.projectFolderName.appendChild(infoIcon);
             }
         } catch (error) {
             console.error('❌ Error loading last project:', error);
