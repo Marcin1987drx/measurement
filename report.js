@@ -84,17 +84,23 @@ function changeLanguage(lang) {
 
 function loadProjectData() {
     try {
-        const projectDataStr = sessionStorage.getItem('measurementProject');
+        // Changed from sessionStorage to localStorage
+        const projectDataStr = localStorage.getItem('measurementProject');
         if (projectDataStr) {
             const projectData = JSON.parse(projectDataStr);
             reportState.project.name = projectData.name || 'Unknown Project';
             reportState.project.maps = projectData.maps || [];
             reportState.project.records = projectData.records || [];
             updateProjectDisplay();
-            console.log(`📁 Project: ${reportState.project.name}`);
+            console.log(`📊 Data Manager: Loaded ${reportState.project.records.length} records from "${reportState.project.name}"`);
+            console.log('📋 Sample record:', reportState.project.records[0]);
+        } else {
+            console.warn('⚠️ No project data found in localStorage. Please select a project in the main app first.');
+            reportState.project.records = [];
         }
     } catch (error) {
-        console.error('❌ Error loading project:', error);
+        console.error('❌ Error loading project data:', error);
+        reportState.project.records = [];
     }
 }
 
@@ -219,20 +225,43 @@ function generateUniqueId() {
 }
 
 function getElementContent(type) {
+    // Get current record data if available
+    const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+        ? reportState.project.records[0] 
+        : null;
+    
+    // Build measurement table HTML
+    let measurementTableHtml = '<div class="element-field">📋 Measurement Table</div>';
+    if (currentRecord && currentRecord.measurements && currentRecord.measurements.length > 0) {
+        measurementTableHtml = '<table style="width: 100%; font-size: 10px; border-collapse: collapse;">';
+        measurementTableHtml += '<tr><th>MP ID</th><th>Value</th><th>Min</th><th>Max</th><th>Status</th></tr>';
+        currentRecord.measurements.forEach(m => {
+            const statusIcon = m.Status === 'OK' ? '✅' : '❌';
+            measurementTableHtml += `<tr>
+                <td>${m.MP_ID}</td>
+                <td>${m.Value} ${m.Unit}</td>
+                <td>${m.Min}</td>
+                <td>${m.Max}</td>
+                <td>${statusIcon} ${m.Status}</td>
+            </tr>`;
+        });
+        measurementTableHtml += '</table>';
+    }
+    
     const templates = {
         text: '<div class="element-text">Text Block</div>',
         title: '<div class="element-title">Title</div>',
         image: '<div class="element-image">🖼️ Image</div>',
         line: '<div class="element-line" style="height: 2px; background: #000; width: 100%;"></div>',
         rectangle: '<div style="width: 100%; height: 100%; border: 2px solid #000;"></div>',
-        date: '<div class="element-field"><strong>Date:</strong> 2025-11-10</div>',
-        time: '<div class="element-field"><strong>Time:</strong> 09:55</div>',
-        user: '<div class="element-field"><strong>User:</strong> Inspector</div>',
-        schemaName: '<div class="element-field"><strong>Schema:</strong> Test Schema</div>',
-        schemaVersion: '<div class="element-field"><strong>Version:</strong> 1.0</div>',
-        qrCode: '<div class="element-field">🔲 QR Code</div>',
-        status: '<div class="element-field">✅ Status: OK</div>',
-        table: '<div class="element-field">📋 Measurement Table</div>',
+        date: `<div class="element-field"><strong>Date:</strong> ${currentRecord ? currentRecord.measurementDate : '2025-11-10'}</div>`,
+        time: `<div class="element-field"><strong>Time:</strong> ${currentRecord ? currentRecord.measurementTime : '09:55'}</div>`,
+        user: `<div class="element-field"><strong>User:</strong> ${currentRecord ? currentRecord.inspector : 'Inspector'}</div>`,
+        schemaName: `<div class="element-field"><strong>Schema:</strong> ${currentRecord ? currentRecord.schemaName : 'Test Schema'}</div>`,
+        schemaVersion: `<div class="element-field"><strong>Version:</strong> ${currentRecord ? currentRecord.schemaVersion : '1.0'}</div>`,
+        qrCode: `<div class="element-field">🔲 ${currentRecord ? currentRecord.qrCode : 'QR Code'}</div>`,
+        status: `<div class="element-field">${currentRecord && currentRecord.overallStatus === 'OK' ? '✅' : '❌'} Status: ${currentRecord ? currentRecord.overallStatus : 'OK'}</div>`,
+        table: measurementTableHtml,
         chart: '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
         vizOverview: '<div class="element-field">🌅 Overview Image</div>',

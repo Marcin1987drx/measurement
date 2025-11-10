@@ -2320,7 +2320,61 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.projectFolderName.textContent = appState.projectRootHandle.name;
             dom.btnProjectFolder.classList.remove('needs-action');
             await scanProjectFolder();
-        } catch (e) {}
+            
+            // Save project data to localStorage for Report Studio
+            const projectData = {
+                name: appState.projectRootHandle.name,
+                lastAccess: Date.now(),
+                records: appState.data.db.map(record => {
+                    // Extract measurements from record
+                    const measurements = [];
+                    Object.keys(record).forEach(key => {
+                        if (key.endsWith('_Value') && record[key]) {
+                            const mpId = key.replace('_Value', '');
+                            const minKey = `${mpId}_Min`;
+                            const maxKey = `${mpId}_Max`;
+                            const nominalKey = `${mpId}_Nominal`;
+                            
+                            // Determine status
+                            const value = parseFloat(record[key].replace(',', '.'));
+                            const min = parseFloat(record[minKey]?.replace(',', '.'));
+                            const max = parseFloat(record[maxKey]?.replace(',', '.'));
+                            let status = 'OK';
+                            if (!isNaN(value) && !isNaN(min) && !isNaN(max)) {
+                                status = (value >= min && value <= max) ? 'OK' : 'NOK';
+                            }
+                            
+                            measurements.push({
+                                MP_ID: mpId,
+                                Value: record[key],
+                                Unit: 'mm', // Default unit
+                                Min: record[minKey] || '',
+                                Max: record[maxKey] || '',
+                                Nominal: record[nominalKey] || '',
+                                Status: status
+                            });
+                        }
+                    });
+                    
+                    return {
+                        qrCode: record.QRCode || '',
+                        measurementDate: record.Timestamp ? new Date(record.Timestamp).toISOString().split('T')[0] : '',
+                        measurementTime: record.Timestamp ? new Date(record.Timestamp).toTimeString().split(' ')[0] : '',
+                        schemaName: record.SchemaName || '',
+                        schemaVersion: record.SchemaVersion || '',
+                        inspector: 'Inspector', // TODO: Add inspector field to schema
+                        overallStatus: record.OverallStatus || 'OK',
+                        measurements: measurements
+                    };
+                })
+            };
+            
+            localStorage.setItem('measurementProject', JSON.stringify(projectData));
+            console.log(`✅ Project saved to localStorage: ${projectData.name} (${projectData.records.length} records)`);
+            
+        } catch (e) {
+            console.error('Error selecting project folder:', e);
+        }
     });
    
     dom.mapSelect.addEventListener('change', handleMapSelect);
@@ -2460,4 +2514,36 @@ document.addEventListener('DOMContentLoaded', () => {
     new ResizeObserver(syncOverlayDimensions).observe(dom.canvasWrapper);
     if (!appState.projectRootHandle) dom.btnProjectFolder.classList.add('needs-action');
     updateUIStrings();
+    
+    // Load last used project from localStorage on startup
+    const loadLastProject = () => {
+        try {
+            const projectDataStr = localStorage.getItem('measurementProject');
+            if (projectDataStr) {
+                const projectData = JSON.parse(projectDataStr);
+                
+                // Clear existing content and set project name
+                dom.projectFolderName.innerHTML = '';
+                const projectNameText = document.createTextNode(projectData.name || 'Unknown Project');
+                dom.projectFolderName.appendChild(projectNameText);
+                dom.btnProjectFolder.classList.remove('needs-action');
+                
+                const lastAccessDate = new Date(projectData.lastAccess).toLocaleString();
+                console.log(`📁 Last project loaded: ${projectData.name} (last access: ${lastAccessDate})`);
+                
+                // Show refresh hint
+                const hint = document.createElement('small');
+                hint.textContent = ` (Last accessed: ${lastAccessDate})`;
+                hint.style.color = 'var(--text-secondary)';
+                hint.style.fontSize = '0.8em';
+                hint.style.marginLeft = '8px';
+                dom.projectFolderName.appendChild(hint);
+            }
+        } catch (error) {
+            console.error('❌ Error loading last project:', error);
+        }
+    };
+
+    // Call on startup
+    loadLastProject();
 });
