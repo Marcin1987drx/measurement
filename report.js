@@ -241,7 +241,7 @@ function setupEventListeners() {
     document.getElementById('btn-open-template')?.addEventListener('click', openTemplate);
     document.getElementById('btn-save-template')?.addEventListener('click', saveTemplate);
     document.getElementById('btn-preview')?.addEventListener('click', () => console.log('👁️ Preview'));
-    document.getElementById('btn-generate-pdf')?.addEventListener('click', () => console.log('📄 Generate PDF'));
+    document.getElementById('btn-generate-pdf')?.addEventListener('click', generatePDF);
     
     document.getElementById('btn-zoom-in')?.addEventListener('click', () => adjustZoom(25));
     document.getElementById('btn-zoom-out')?.addEventListener('click', () => adjustZoom(-25));
@@ -275,14 +275,116 @@ function newTemplate() {
 }
 
 function openTemplate() {
-    document.getElementById('open-template-modal')?.classList.add('open');
+    try {
+        const templates = JSON.parse(localStorage.getItem('reportTemplates') || '{}');
+        const templateNames = Object.keys(templates);
+        
+        if (templateNames.length === 0) {
+            alert('No saved templates found. Create and save a template first.');
+            return;
+        }
+        
+        // Create a simple selection dialog
+        let message = 'Select a template to load:\n\n';
+        templateNames.forEach((name, index) => {
+            const template = templates[name];
+            const savedDate = template.meta.savedAt ? new Date(template.meta.savedAt).toLocaleString() : 'Unknown';
+            message += `${index + 1}. ${name} (Saved: ${savedDate})\n`;
+        });
+        message += '\nEnter the number of the template to load:';
+        
+        const selection = prompt(message);
+        if (!selection) return;
+        
+        const index = parseInt(selection) - 1;
+        if (index < 0 || index >= templateNames.length) {
+            alert('Invalid selection.');
+            return;
+        }
+        
+        const templateName = templateNames[index];
+        loadTemplateData(templates[templateName]);
+        
+    } catch (error) {
+        console.error('❌ Error loading templates:', error);
+        alert('❌ Failed to load templates.');
+    }
 }
 
 function saveTemplate() {
     const name = prompt('Template name:', reportState.template.meta.name);
-    if (name) {
+    if (!name) return;
+    
+    // Capture current canvas state
+    const templateData = {
+        meta: {
+            name: name,
+            paper: reportState.template.meta.paper,
+            orientation: reportState.template.meta.orientation,
+            savedAt: new Date().toISOString()
+        },
+        pages: []
+    };
+    
+    // Collect all pages and their elements
+    document.querySelectorAll('.canvas-page').forEach((page, pageIndex) => {
+        const pageData = {
+            id: pageIndex + 1,
+            components: []
+        };
+        
+        const pageContent = page.querySelector('.page-content');
+        pageContent.querySelectorAll('.canvas-element').forEach(element => {
+            const component = {
+                id: element.dataset.id,
+                type: element.dataset.type,
+                position: {
+                    x: parseInt(element.style.left) || 0,
+                    y: parseInt(element.style.top) || 0
+                },
+                size: {
+                    width: parseInt(element.style.width) || 200,
+                    height: parseInt(element.style.height) || 50
+                },
+                style: {
+                    zIndex: element.style.zIndex || '1',
+                    border: element.style.border || '2px solid var(--accent-color)',
+                    background: element.style.background || 'var(--bg-secondary)',
+                    padding: element.style.padding || '8px'
+                }
+            };
+            
+            // Capture text content for text/title elements
+            const textEl = element.querySelector('.element-text, .element-title');
+            if (textEl) {
+                component.content = textEl.textContent;
+                component.textStyle = {
+                    fontFamily: textEl.style.fontFamily || 'Arial',
+                    fontSize: textEl.style.fontSize || '14px',
+                    fontWeight: textEl.style.fontWeight || 'normal',
+                    color: textEl.style.color || '#000000',
+                    textAlign: textEl.style.textAlign || 'left'
+                };
+            }
+            
+            pageData.components.push(component);
+        });
+        
+        templateData.pages.push(pageData);
+    });
+    
+    // Save to localStorage template library
+    try {
+        let templates = JSON.parse(localStorage.getItem('reportTemplates') || '{}');
+        templates[name] = templateData;
+        localStorage.setItem('reportTemplates', JSON.stringify(templates));
+        
         reportState.template.meta.name = name;
-        console.log('💾 Saved:', name);
+        alert(`✅ Template "${name}" saved successfully!`);
+        console.log('💾 Template saved:', name);
+    } catch (error) {
+        console.error('❌ Error saving template:', error);
+        alert('❌ Failed to save template. Please try again.');
     }
 }
 
@@ -1034,6 +1136,247 @@ function setupKeyboardShortcuts() {
                 break;
         }
     });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TEMPLATE LOADING
+// ════════════════════════════════════════════════════════════════════════════
+
+function loadTemplateData(templateData) {
+    try {
+        // Clear existing canvas
+        const container = document.getElementById('canvas-container');
+        if (!container) {
+            console.error('❌ Canvas container not found');
+            return;
+        }
+        
+        // Remove all existing pages
+        container.innerHTML = '';
+        
+        // Update template metadata
+        reportState.template.meta = templateData.meta;
+        reportState.template.pages = [];
+        
+        // Recreate pages from template
+        templateData.pages.forEach((pageData, pageIndex) => {
+            // Create page element
+            const page = document.createElement('div');
+            page.className = 'canvas-page';
+            page.dataset.page = pageData.id;
+            
+            const pageHeader = document.createElement('div');
+            pageHeader.className = 'page-header';
+            pageHeader.innerHTML = `<span class="page-number">Page ${pageData.id}</span>`;
+            
+            const pageContent = document.createElement('div');
+            pageContent.className = 'page-content';
+            pageContent.id = `page-content-${pageData.id}`;
+            
+            page.appendChild(pageHeader);
+            page.appendChild(pageContent);
+            container.appendChild(page);
+            
+            // Recreate components on this page
+            pageData.components.forEach(comp => {
+                const element = document.createElement('div');
+                element.className = 'canvas-element';
+                element.dataset.type = comp.type;
+                element.dataset.id = comp.id;
+                
+                // Set position and size
+                element.style.position = 'absolute';
+                element.style.left = comp.position.x + 'px';
+                element.style.top = comp.position.y + 'px';
+                element.style.width = comp.size.width + 'px';
+                element.style.height = comp.size.height + 'px';
+                
+                // Set style
+                element.style.zIndex = comp.style.zIndex;
+                element.style.border = comp.style.border;
+                element.style.background = comp.style.background;
+                element.style.padding = comp.style.padding;
+                
+                // Set content
+                if (comp.content && comp.textStyle) {
+                    // Text/title element
+                    const textEl = document.createElement('div');
+                    textEl.className = comp.type === 'title' ? 'element-title' : 'element-text';
+                    textEl.textContent = comp.content;
+                    textEl.style.fontFamily = comp.textStyle.fontFamily;
+                    textEl.style.fontSize = comp.textStyle.fontSize;
+                    textEl.style.fontWeight = comp.textStyle.fontWeight;
+                    textEl.style.color = comp.textStyle.color;
+                    textEl.style.textAlign = comp.textStyle.textAlign;
+                    element.appendChild(textEl);
+                } else {
+                    // Dynamic element - get fresh content
+                    element.innerHTML = getElementContent(comp.type);
+                }
+                
+                // Make interactive
+                makeElementInteractive(element);
+                
+                // Add to page
+                pageContent.appendChild(element);
+            });
+            
+            reportState.template.pages.push(pageData);
+        });
+        
+        alert(`✅ Template "${templateData.meta.name}" loaded successfully!`);
+        console.log('📂 Template loaded:', templateData.meta.name);
+        
+    } catch (error) {
+        console.error('❌ Error loading template:', error);
+        alert('❌ Failed to load template.');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PDF GENERATION
+// ════════════════════════════════════════════════════════════════════════════
+
+function generatePDF() {
+    try {
+        // Check if jsPDF is loaded
+        if (typeof window.jspdf === 'undefined') {
+            alert('❌ jsPDF library not loaded. Please refresh the page.');
+            console.error('❌ jsPDF not available');
+            return;
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: reportState.template.meta.orientation || 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        // Get all pages
+        const pages = document.querySelectorAll('.canvas-page');
+        
+        if (pages.length === 0) {
+            alert('No pages to export. Add elements to the canvas first.');
+            return;
+        }
+        
+        // Process each page
+        pages.forEach((page, pageIndex) => {
+            if (pageIndex > 0) {
+                doc.addPage();
+            }
+            
+            const pageContent = page.querySelector('.page-content');
+            const elements = pageContent.querySelectorAll('.canvas-element');
+            
+            // Render each element
+            elements.forEach(element => {
+                const type = element.dataset.type;
+                const x = parseInt(element.style.left) || 0;
+                const y = parseInt(element.style.top) || 0;
+                const width = parseInt(element.style.width) || 200;
+                const height = parseInt(element.style.height) || 50;
+                
+                // Convert pixel coordinates to mm (rough conversion: 1px ≈ 0.26mm)
+                const pxToMm = 0.26;
+                const xMm = x * pxToMm;
+                const yMm = y * pxToMm;
+                const widthMm = width * pxToMm;
+                const heightMm = height * pxToMm;
+                
+                // Render based on element type
+                if (['text', 'title'].includes(type)) {
+                    const textEl = element.querySelector('.element-text, .element-title');
+                    if (textEl) {
+                        const text = textEl.textContent;
+                        const fontSize = parseInt(window.getComputedStyle(textEl).fontSize) || 14;
+                        const fontWeight = window.getComputedStyle(textEl).fontWeight;
+                        
+                        doc.setFontSize(fontSize * 0.75); // Convert px to pt
+                        doc.setFont('helvetica', fontWeight === 'bold' || fontWeight >= 600 ? 'bold' : 'normal');
+                        doc.text(text, xMm, yMm + 5);
+                    }
+                } else if (type === 'line') {
+                    doc.setLineWidth(0.5);
+                    doc.line(xMm, yMm, xMm + widthMm, yMm);
+                } else if (type === 'rectangle') {
+                    doc.setLineWidth(0.5);
+                    doc.rect(xMm, yMm, widthMm, heightMm);
+                } else if (['date', 'time', 'user', 'schemaName', 'schemaVersion', 'qrCode', 'status', 'field'].includes(type)) {
+                    // Dynamic fields - extract text content
+                    const fieldEl = element.querySelector('.element-field');
+                    if (fieldEl) {
+                        const text = fieldEl.textContent;
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(text, xMm, yMm + 5);
+                    }
+                } else if (type === 'table') {
+                    // Render table - simplified version
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('📋 Measurement Table', xMm, yMm + 5);
+                    
+                    // Get current record
+                    const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+                        ? reportState.project.records[reportState.project.currentRecordIndex] 
+                        : null;
+                    
+                    if (currentRecord && currentRecord.measurements) {
+                        const validMeasurements = currentRecord.measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+                        
+                        let tableY = yMm + 10;
+                        const lineHeight = 4;
+                        
+                        // Table headers
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('MP ID', xMm + 2, tableY);
+                        doc.text('Value', xMm + 20, tableY);
+                        doc.text('Status', xMm + 35, tableY);
+                        tableY += lineHeight;
+                        
+                        doc.setFont('helvetica', 'normal');
+                        
+                        // Table rows (limited to fit in height)
+                        const maxRows = Math.floor((heightMm - 15) / lineHeight);
+                        validMeasurements.slice(0, maxRows).forEach(m => {
+                            doc.text(m.MP_ID || '', xMm + 2, tableY);
+                            doc.text(String(m.Value), xMm + 20, tableY);
+                            doc.text(m.Status || '', xMm + 35, tableY);
+                            tableY += lineHeight;
+                        });
+                    }
+                } else {
+                    // Other elements - render as text placeholder
+                    doc.setFontSize(10);
+                    doc.text(`[${type}]`, xMm, yMm + 5);
+                }
+            });
+            
+            // Add page number
+            doc.setFontSize(8);
+            doc.text(`Page ${pageIndex + 1} of ${pages.length}`, pageWidth - 30, pageHeight - 10);
+        });
+        
+        // Generate filename
+        const templateName = reportState.template.meta.name || 'report';
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const filename = `${templateName}_${timestamp}.pdf`;
+        
+        // Download PDF
+        doc.save(filename);
+        
+        console.log('✅ PDF generated:', filename);
+        alert(`✅ PDF "${filename}" generated successfully!`);
+        
+    } catch (error) {
+        console.error('❌ Error generating PDF:', error);
+        alert('❌ Failed to generate PDF. Please check the console for details.');
+    }
 }
 
 console.log('📄 report.js loaded');
