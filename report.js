@@ -220,8 +220,8 @@ function generateUniqueId() {
 
 function getElementContent(type) {
     const templates = {
-        text: '<div class="element-text" contenteditable="true">Text Block</div>',
-        title: '<div class="element-title" contenteditable="true">Title</div>',
+        text: '<div class="element-text">Text Block</div>',
+        title: '<div class="element-title">Title</div>',
         image: '<div class="element-image">🖼️ Image</div>',
         line: '<div class="element-line" style="height: 2px; background: #000; width: 100%;"></div>',
         rectangle: '<div style="width: 100%; height: 100%; border: 2px solid #000;"></div>',
@@ -291,6 +291,32 @@ function makeElementInteractive(element) {
         e.stopPropagation();
         selectElement(element);
         startDrag(e, element);
+    });
+    
+    // Double-click to edit text
+    element.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const textEl = element.querySelector('.element-text, .element-title');
+        if (textEl) {
+            textEl.contentEditable = 'true';
+            textEl.style.pointerEvents = 'auto';
+            textEl.focus();
+            
+            // Select all text
+            const range = document.createRange();
+            range.selectNodeContents(textEl);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            // Disable editing on blur
+            const onBlur = () => {
+                textEl.contentEditable = 'false';
+                textEl.style.pointerEvents = 'none';
+                textEl.removeEventListener('blur', onBlur);
+            };
+            textEl.addEventListener('blur', onBlur);
+        }
     });
 }
 
