@@ -240,7 +240,8 @@ function getElementContent(type) {
         vizAuto: '<div class="element-field">🤖 Auto Visualization</div>',
         pageNumber: '<div class="element-field">Page {page}</div>'
     };
-    return templates[type] || `<div>[${type}]</div>`;
+    // Only return content if type is in the allowed templates (prevents XSS)
+    return templates[type] || '<div class="element-field">Unknown Element</div>';
 }
 
 function getSelectedElement() {
