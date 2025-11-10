@@ -2372,7 +2372,9 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('measurementProject', JSON.stringify(projectData));
             console.log(`✅ Project saved to localStorage: ${projectData.name} (${projectData.records.length} records)`);
             
-        } catch (e) {}
+        } catch (e) {
+            console.error('Error selecting project folder:', e);
+        }
     });
    
     dom.mapSelect.addEventListener('change', handleMapSelect);
@@ -2519,7 +2521,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const projectDataStr = localStorage.getItem('measurementProject');
             if (projectDataStr) {
                 const projectData = JSON.parse(projectDataStr);
-                dom.projectFolderName.textContent = projectData.name || 'Unknown Project';
+                
+                // Clear existing content and set project name
+                dom.projectFolderName.innerHTML = '';
+                const projectNameText = document.createTextNode(projectData.name || 'Unknown Project');
+                dom.projectFolderName.appendChild(projectNameText);
                 dom.btnProjectFolder.classList.remove('needs-action');
                 
                 const lastAccessDate = new Date(projectData.lastAccess).toLocaleString();
