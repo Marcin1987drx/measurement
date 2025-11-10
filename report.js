@@ -47,6 +47,77 @@ const reportState = {
     }
 };
 
+// ════════════════════════════════════════════════════════════════
+// DATA MANAGER
+// ════════════════════════════════════════════════════════════════
+
+const DataManager = {
+    records: [],
+    currentRecordIndex: 0,
+    
+    init() {
+        this.loadProjectData();
+    },
+    
+    loadProjectData() {
+        try {
+            const projectDataStr = sessionStorage.getItem('measurementProject');
+            if (projectDataStr) {
+                const projectData = JSON.parse(projectDataStr);
+                this.records = projectData.records || [];
+                console.log(`📊 Data Manager: ${this.records.length} records loaded`);
+                if (this.records.length > 0) this.currentRecordIndex = 0;
+            }
+        } catch (error) {
+            console.error('❌ Error loading project data:', error);
+            this.records = [];
+        }
+    },
+    
+    getCurrentRecord() {
+        if (this.records.length === 0) return this.getMockRecord();
+        return this.records[this.currentRecordIndex] || this.getMockRecord();
+    },
+    
+    getMockRecord() {
+        return {
+            qrCode: 'DEMO-ABC123',
+            measurementDate: '2025-11-10',
+            schemaName: 'Demo Schema',
+            inspector: 'Demo User',
+            measurements: [
+                { MP_ID: 'Length_1', Value: 45.2, Unit: 'mm', Min: 45, Max: 46, Status: 'OK' },
+                { MP_ID: 'Width_1', Value: 12.8, Unit: 'mm', Min: 12, Max: 13, Status: 'OK' }
+            ]
+        };
+    },
+    
+    getFieldValue(binding) {
+        const record = this.getCurrentRecord();
+        if (binding === 'current.qrCode') return record.qrCode || '';
+        if (binding === 'current.measurementDate') return record.measurementDate || '';
+        if (binding === 'current.schemaName') return record.schemaName || '';
+        if (binding === 'current.inspector') return record.inspector || '';
+        if (binding === 'current.measurements') return record.measurements || [];
+        if (binding === 'calculated.overallStatus') {
+            const measurements = record.measurements || [];
+            const allOK = measurements.every(m => m.Status === 'OK');
+            return allOK ? '✅ OK' : '❌ NOK';
+        }
+        if (binding === 'system.currentDate') return new Date().toISOString().split('T')[0];
+        if (binding === 'system.currentTime') return new Date().toTimeString().split(' ')[0];
+        return '';
+    },
+    
+    refreshAllDynamicElements() {
+        document.querySelectorAll('.canvas-element[data-binding]').forEach(element => {
+            if (element.dataset.binding && element.dataset.binding !== 'static') {
+                renderElementContent(element);
+            }
+        });
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🎨 Report Studio initializing...');
     
@@ -54,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeLanguage();
     loadProjectData();
     setupEventListeners();
+    DataManager.init();
     
     console.log('✅ Report Studio ready!');
 });
@@ -244,6 +316,77 @@ function getElementContent(type) {
     return templates[type] || '<div class="element-field">Unknown Element</div>';
 }
 
+function getDefaultBinding(type) {
+    const bindings = {
+        'qrCode': 'current.qrCode',
+        'date': 'system.currentDate',
+        'time': 'system.currentTime',
+        'user': 'current.inspector',
+        'schemaName': 'current.schemaName',
+        'status': 'calculated.overallStatus',
+        'table': 'current.measurements'
+    };
+    return bindings[type] || 'static';
+}
+
+function renderElementContent(element) {
+    const type = element.dataset.type;
+    const binding = element.dataset.binding;
+    
+    let content = '';
+    
+    if (binding && binding !== 'static') {
+        const value = DataManager.getFieldValue(binding);
+        if (type === 'table' && binding === 'current.measurements') {
+            content = renderMeasurementTable(value);
+        } else {
+            content = getDynamicElementContent(type, value);
+        }
+    } else {
+        content = getElementContent(type);
+    }
+    
+    element.innerHTML = content;
+}
+
+function getDynamicElementContent(type, value) {
+    const templates = {
+        'qrCode': `<div class="element-field"><strong>QR Code:</strong> ${value}</div>`,
+        'date': `<div class="element-field"><strong>Date:</strong> ${value}</div>`,
+        'time': `<div class="element-field"><strong>Time:</strong> ${value}</div>`,
+        'user': `<div class="element-field"><strong>Inspector:</strong> ${value}</div>`,
+        'schemaName': `<div class="element-field"><strong>Schema:</strong> ${value}</div>`,
+        'status': `<div class="element-field"><strong>Status:</strong> ${value}</div>`
+    };
+    return templates[type] || `<div class="element-field">${value}</div>`;
+}
+
+function renderMeasurementTable(measurements) {
+    if (!measurements || measurements.length === 0) {
+        return '<div class="element-field">📋 No measurements</div>';
+    }
+    
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    html += '<thead><tr style="background:var(--bg-tertiary);font-weight:bold;">';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;">MP</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;">Value</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;">Unit</th>';
+    html += '<th style="border:1px solid var(--border-color);padding:6px;">Status</th>';
+    html += '</tr></thead><tbody>';
+    
+    measurements.forEach(m => {
+        html += '<tr>';
+        html += `<td style="border:1px solid var(--border-color);padding:6px;">${m.MP_ID}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;">${m.Value}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;">${m.Unit}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;color:${m.Status==='OK'?'green':'red'};">${m.Status==='OK'?'✅':'❌'}</td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
 function getSelectedElement() {
     return reportState.selection.element;
 }
@@ -257,20 +400,21 @@ function createCanvasElement(type, x, y, container) {
     element.className = 'canvas-element';
     element.dataset.type = type;
     element.dataset.id = generateUniqueId();
+    element.dataset.binding = getDefaultBinding(type);
     
     // Position and size
     element.style.position = 'absolute';
     element.style.left = snapToGrid(x) + 'px';
     element.style.top = snapToGrid(y) + 'px';
-    element.style.width = '200px';
-    element.style.height = '50px';
+    element.style.width = (type === 'table' ? '600' : '200') + 'px';
+    element.style.height = (type === 'table' ? '200' : '50') + 'px';
     element.style.border = '2px solid var(--accent-color)';
     element.style.padding = '8px';
     element.style.background = 'var(--bg-secondary)';
     element.style.zIndex = '1';
     
     // Content based on type
-    element.innerHTML = getElementContent(type);
+    renderElementContent(element);
     
     // Make it interactive
     makeElementInteractive(element);
@@ -662,12 +806,35 @@ function updatePropertiesPanel(element) {
         </div>
         
         <div class="property-section">
-            <div class="property-section-title">Data Binding (Coming Soon)</div>
-            <p style="font-size: 0.85em; color: var(--text-secondary);">Dynamic data binding will be available in a future update.</p>
+            <div class="property-section-title">Data Binding</div>
+            <div class="property-row full">
+                <div class="property-field">
+                    <label class="property-label">Binding Type</label>
+                    <select class="property-select" id="prop-binding">
+                        <option value="static">Static (No Data)</option>
+                        <option value="current.qrCode">QR Code</option>
+                        <option value="current.measurementDate">Date</option>
+                        <option value="current.schemaName">Schema Name</option>
+                        <option value="current.inspector">Inspector</option>
+                        <option value="calculated.overallStatus">Overall Status</option>
+                        <option value="current.measurements">Measurements Table</option>
+                        <option value="system.currentDate">System Date</option>
+                        <option value="system.currentTime">System Time</option>
+                    </select>
+                </div>
+            </div>
         </div>
     `;
     
     container.innerHTML = html;
+    
+    // Set selected value for data binding
+    setTimeout(() => {
+        const bindingSelect = document.getElementById('prop-binding');
+        if (bindingSelect && element.dataset.binding) {
+            bindingSelect.value = element.dataset.binding;
+        }
+    }, 0);
     
     // Attach event listeners for property changes
     attachPropertyListeners(element);
@@ -722,6 +889,12 @@ function attachPropertyListeners(element) {
             });
         });
     }
+    
+    // Data Binding
+    document.getElementById('prop-binding')?.addEventListener('change', (e) => {
+        element.dataset.binding = e.target.value;
+        renderElementContent(element);
+    });
     
     // Actions
     document.getElementById('btn-delete')?.addEventListener('click', () => deleteElement(element));
