@@ -216,6 +216,7 @@
     width: 100%;
     height: 100%;
     position: relative;
+    overflow: hidden;
 }
 
 .properties-panel {
@@ -288,8 +289,19 @@
 
 .resize-handle:hover {
     background-color: var(--accent-hover);
-    transform: scale(1.2);
+    width: 12px;
+    height: 12px;
 }
+
+/* Add separate transforms for each handle to preserve position transforms */
+.resize-handle.nw:hover { top: -6px; left: -6px; }
+.resize-handle.n:hover  { top: -6px; }
+.resize-handle.ne:hover { top: -6px; right: -6px; }
+.resize-handle.e:hover  { right: -6px; }
+.resize-handle.se:hover { bottom: -6px; right: -6px; }
+.resize-handle.s:hover  { bottom: -6px; }
+.resize-handle.sw:hover { bottom: -6px; left: -6px; }
+.resize-handle.w:hover  { left: -6px; }
 
 /* Element Content Styles */
 .element-text, .element-title, .element-field {
@@ -297,6 +309,7 @@
     height: 100%;
     outline: none;
     overflow: hidden;
+    pointer-events: none;
 }
 
 .element-text {
@@ -308,6 +321,12 @@
     font-size: 24px;
     font-weight: bold;
     line-height: 1.2;
+}
+
+.element-text[contenteditable="false"],
+.element-title[contenteditable="false"] {
+    pointer-events: none;
+    user-select: none;
 }
 
 .element-image, .element-line, .element-field {
