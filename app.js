@@ -2322,64 +2322,72 @@ document.addEventListener('DOMContentLoaded', () => {
             await scanProjectFolder();
             
             // Save project data to localStorage for Report Studio
-            const projectData = {
-                name: appState.projectRootHandle.name,
-                lastAccess: Date.now(),
-                records: appState.data.db.map(record => {
-                    const measurements = [];
-                    
-                    // Find all MP fields by looking for _Value columns
-                    Object.keys(record).forEach(key => {
-                        if (key.endsWith('_Value') && record[key]) {
-                            const mpId = key.replace('_Value', '');
-                            
-                            // Get ALL related fields for this MP
-                            const value = record[`${mpId}_Value`];
-                            const min = record[`${mpId}_Min`];
-                            const max = record[`${mpId}_Max`];
-                            const nominal = record[`${mpId}_Nominal`];
-                            const unit = record[`${mpId}_Unit`];
-                            const name = record[`${mpId}_Name`];
-                            
-                            // Determine status
-                            const valueNum = parseFloat((value || '').toString().replace(',', '.'));
-                            const minNum = parseFloat((min || '').toString().replace(',', '.'));
-                            const maxNum = parseFloat((max || '').toString().replace(',', '.'));
-                            
-                            let status = 'OK';
-                            if (!isNaN(valueNum) && !isNaN(minNum) && !isNaN(maxNum)) {
-                                status = (valueNum >= minNum && valueNum <= maxNum) ? 'OK' : 'NOK';
+            try {
+                console.log('📊 Saving project to localStorage...');
+                console.log('📊 Records in appState.data.db:', appState.data.db.length);
+                
+                const projectData = {
+                    name: appState.projectRootHandle.name,
+                    lastAccess: Date.now(),
+                    records: appState.data.db.map(record => {
+                        const measurements = [];
+                        
+                        // Extract all MP fields
+                        Object.keys(record).forEach(key => {
+                            if (key.endsWith('_Value') && record[key] && record[key].toString().trim() !== '') {
+                                const mpId = key.replace('_Value', '');
+                                
+                                const value = record[`${mpId}_Value`];
+                                const min = record[`${mpId}_Min`];
+                                const max = record[`${mpId}_Max`];
+                                const nominal = record[`${mpId}_Nominal`];
+                                const unit = record[`${mpId}_Unit`];
+                                const name = record[`${mpId}_Name`];
+                                
+                                // Parse numbers (comma as decimal)
+                                const valueNum = parseFloat((value || '').toString().replace(',', '.'));
+                                const minNum = parseFloat((min || '').toString().replace(',', '.'));
+                                const maxNum = parseFloat((max || '').toString().replace(',', '.'));
+                                
+                                let status = 'OK';
+                                if (!isNaN(valueNum) && !isNaN(minNum) && !isNaN(maxNum)) {
+                                    status = (valueNum >= minNum && valueNum <= maxNum) ? 'OK' : 'NOK';
+                                }
+                                
+                                measurements.push({
+                                    MP_ID: mpId,
+                                    Name: name || mpId,
+                                    Value: value,
+                                    Unit: unit || 'mm',
+                                    Min: min || '',
+                                    Max: max || '',
+                                    Nominal: nominal || '',
+                                    Status: status
+                                });
                             }
-                            
-                            measurements.push({
-                                MP_ID: mpId,
-                                Name: name || mpId,
-                                Value: value,
-                                Unit: unit || 'mm',
-                                Min: min || '',
-                                Max: max || '',
-                                Nominal: nominal || '',
-                                Status: status
-                            });
-                        }
-                    });
-                    
-                    return {
-                        qrCode: record.QRCode || '',
-                        measurementDate: record.Timestamp ? new Date(record.Timestamp).toISOString().split('T')[0] : '',
-                        measurementTime: record.Timestamp ? new Date(record.Timestamp).toTimeString().split(' ')[0] : '',
-                        schemaName: record.SchemaName || '',
-                        schemaVersion: record.SchemaVersion || '',
-                        inspector: 'Inspector',
-                        overallStatus: record.OverallStatus || 'OK',
-                        comment: record.Comment || '',
-                        measurements: measurements
-                    };
-                })
-            };
-            
-            localStorage.setItem('measurementProject', JSON.stringify(projectData));
-            console.log(`✅ Project saved to localStorage: ${projectData.name} (${projectData.records.length} records, ${projectData.records[0]?.measurements?.length || 0} MPs)`);
+                        });
+                        
+                        return {
+                            qrCode: record.QRCode || '',
+                            measurementDate: record.Timestamp ? new Date(record.Timestamp).toISOString().split('T')[0] : '',
+                            measurementTime: record.Timestamp ? new Date(record.Timestamp).toTimeString().split(' ')[0] : '',
+                            schemaName: record.SchemaName || '',
+                            schemaVersion: record.SchemaVersion || '',
+                            inspector: 'Inspector',
+                            overallStatus: record.OverallStatus || 'OK',
+                            comment: record.Comment || '',
+                            measurements: measurements
+                        };
+                    })
+                };
+                
+                localStorage.setItem('measurementProject', JSON.stringify(projectData));
+                console.log(`✅ Saved ${projectData.records.length} records to localStorage`);
+                console.log('✅ Sample record:', projectData.records[0]);
+                
+            } catch (err) {
+                console.error('❌ Error saving to localStorage:', err);
+            }
             
         } catch (e) {
             console.error('Error selecting project folder:', e);
