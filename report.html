@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Studio - Dräxlmaier</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="report.css">
+</head>
+<body lang="en">
+    <div id="app">
+        <!-- HEADER (copied from index.html) -->
+        <header class="app-header">
+            <div class="project-info">
+                <div class="brand-identity">
+                    <img id="header-logo" src="" alt="Logo" style="height: 36px; display: none;">
+                    <h2>Dräxlmaier Group - Report Studio</h2>
+                </div>
+                <button id="btn-back-to-main" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                    <span data-i18n="backToMain">Back to Main</span>
+                </button>
+                <div id="project-folder-name" class="current-project-name">No Project Selected</div>
+            </div>
+            <div class="header-actions">
+                <select id="language-toggle" class="select-field">
+                    <option value="en" selected>EN</option>
+                    <option value="pl">PL</option>
+                    <option value="de">DE</option>
+                </select>
+                <button id="theme-toggle" class="btn btn-secondary" title="Toggle theme">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 15.31 23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69z"/>
+                    </svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 2c-1.82 0-3.53.5-5 1.35C7.99 5.08 10 8.3 10 12s-2.01 6.92-5 8.65C6.47 21.5 8.18 22 10 22c5.52 0 10-4.48 10-10S15.52 2 10 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT: 3-PANEL LAYOUT -->
+        <main class="report-studio">
+            <!-- LEFT PANEL: COMPONENTS PALETTE -->
+            <aside class="components-panel">
+                <div class="panel-header">
+                    <h3 data-i18n="components">Components</h3>
+                    <input type="search" id="component-search" class="input-field" placeholder="Search components...">
+                </div>
+
+                <div class="components-list">
+                    <!-- STATIC ELEMENTS -->
+                    <div class="component-category">
+                        <div class="category-header">
+                            <span>📄</span>
+                            <span data-i18n="staticElements">Static Elements</span>
+                        </div>
+                        <div class="category-items">
+                            <div class="component-item" draggable="true" data-type="text">
+                                <span class="component-icon">📝</span>
+                                <span class="component-name" data-i18n="textBlock">Text Block</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="title">
+                                <span class="component-icon">🎯</span>
+                                <span class="component-name" data-i18n="title">Title</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="image">
+                                <span class="component-icon">🖼️</span>
+                                <span class="component-name" data-i18n="image">Image</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="line">
+                                <span class="component-icon">➖</span>
+                                <span class="component-name" data-i18n="line">Line</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="rectangle">
+                                <span class="component-icon">⬜</span>
+                                <span class="component-name" data-i18n="rectangle">Rectangle</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="pageNumber">
+                                <span class="component-icon">📄</span>
+                                <span class="component-name" data-i18n="pageNumber">Page Number</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DYNAMIC FIELDS -->
+                    <div class="component-category">
+                        <div class="category-header">
+                            <span>🔗</span>
+                            <span data-i18n="dynamicFields">Dynamic Fields</span>
+                        </div>
+                        <div class="category-items">
+                            <div class="component-item" draggable="true" data-type="date">
+                                <span class="component-icon">📅</span>
+                                <span class="component-name" data-i18n="currentDate">Current Date</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="time">
+                                <span class="component-icon">🕐</span>
+                                <span class="component-name" data-i18n="currentTime">Current Time</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="user">
+                                <span class="component-icon">👤</span>
+                                <span class="component-name" data-i18n="user">User/Inspector</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="schemaName">
+                                <span class="component-icon">🏷️</span>
+                                <span class="component-name" data-i18n="schemaName">Schema Name</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="schemaVersion">
+                                <span class="component-icon">🔢</span>
+                                <span class="component-name" data-i18n="schemaVersion">Schema Version</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="qrCode">
+                                <span class="component-icon">🔲</span>
+                                <span class="component-name" data-i18n="qrCode">QR Code</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="status">
+                                <span class="component-icon">✅</span>
+                                <span class="component-name" data-i18n="overallStatus">Overall Status</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DATA COMPONENTS -->
+                    <div class="component-category">
+                        <div class="category-header">
+                            <span>📊</span>
+                            <span data-i18n="dataComponents">Data Components</span>
+                        </div>
+                        <div class="category-items">
+                            <div class="component-item" draggable="true" data-type="table">
+                                <span class="component-icon">📋</span>
+                                <span class="component-name" data-i18n="measurementTable">Measurement Table</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="chart">
+                                <span class="component-icon">📈</span>
+                                <span class="component-name" data-i18n="chart">Chart</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="field">
+                                <span class="component-icon">🔍</span>
+                                <span class="component-name" data-i18n="singleField">Single Field</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VISUALIZATION -->
+                    <div class="component-category">
+                        <div class="category-header">
+                            <span>🖼️</span>
+                            <span data-i18n="visualization">Visualization</span>
+                        </div>
+                        <div class="category-items">
+                            <div class="component-item" draggable="true" data-type="vizOverview">
+                                <span class="component-icon">🌅</span>
+                                <span class="component-name" data-i18n="overviewImage">Overview Image</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="vizZooms">
+                                <span class="component-icon">🔎</span>
+                                <span class="component-name" data-i18n="zoomImages">Zoom Images</span>
+                            </div>
+                            <div class="component-item" draggable="true" data-type="vizAuto">
+                                <span class="component-icon">🤖</span>
+                                <span class="component-name" data-i18n="autoVisualization">Auto (Overview + Zooms)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CENTER PANEL: CANVAS -->
+            <section class="canvas-panel">
+                <!-- TOOLBAR -->
+                <div class="canvas-toolbar">
+                    <div class="toolbar-group">
+                        <button id="btn-new-template" class="btn btn-secondary" title="New Template">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            <span data-i18n="new">New</span>
+                        </button>
+                        <button id="btn-open-template" class="btn btn-secondary" title="Open Template">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                            </svg>
+                            <span data-i18n="open">Open</span>
+                        </button>
+                        <button id="btn-save-template" class="btn btn-primary" title="Save Template">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                            </svg>
+                            <span data-i18n="save">Save</span>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-separator"></div>
+
+                    <div class="toolbar-group">
+                        <button id="btn-preview" class="btn btn-secondary" title="Preview">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                            </svg>
+                            <span data-i18n="preview">Preview</span>
+                        </button>
+                        <button id="btn-generate-pdf" class="btn btn-primary" title="Generate PDF">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                            </svg>
+                            <span data-i18n="generatePDF">Generate PDF</span>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-separator"></div>
+
+                    <div class="toolbar-group">
+                        <label class="toolbar-label" data-i18n="zoom">Zoom:</label>
+                        <button id="btn-zoom-out" class="btn btn-secondary btn-icon" title="Zoom Out">−</button>
+                        <span id="zoom-level" class="zoom-indicator">100%</span>
+                        <button id="btn-zoom-in" class="btn btn-secondary btn-icon" title="Zoom In">+</button>
+                    </div>
+
+                    <div class="toolbar-separator"></div>
+
+                    <div class="toolbar-group">
+                        <label class="toolbar-checkbox">
+                            <input type="checkbox" id="toggle-grid" checked>
+                            <span data-i18n="grid">Grid</span>
+                        </label>
+                        <label class="toolbar-checkbox">
+                            <input type="checkbox" id="toggle-snap" checked>
+                            <span data-i18n="snap">Snap</span>
+                        </label>
+                        <label class="toolbar-checkbox">
+                            <input type="checkbox" id="toggle-rulers">
+                            <span data-i18n="rulers">Rulers</span>
+                        </label>
+                    </div>
+
+                    <div class="toolbar-separator"></div>
+
+                    <div class="toolbar-group">
+                        <div class="mode-toggle">
+                            <input type="radio" id="mode-designer" name="mode" value="designer" checked>
+                            <label for="mode-designer" data-i18n="designer">Designer</label>
+                            <input type="radio" id="mode-generator" name="mode" value="generator">
+                            <label for="mode-generator" data-i18n="generator">Generator</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CANVAS AREA -->
+                <div class="canvas-wrapper" id="canvas-wrapper">
+                    <div class="canvas-container" id="canvas-container">
+                        <!-- Pages will be added here dynamically -->
+                        <div class="canvas-page" data-page="1">
+                            <div class="page-header">
+                                <span class="page-number">Page 1</span>
+                            </div>
+                            <div class="page-content" id="page-content-1">
+                                <!-- Elements will be dropped here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADD PAGE BUTTON -->
+                    <button id="btn-add-page" class="btn btn-secondary btn-add-page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        <span data-i18n="addPage">Add Page</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- RIGHT PANEL: PROPERTIES -->
+            <aside class="properties-panel">
+                <div class="panel-header">
+                    <h3 data-i18n="properties">Properties</h3>
+                </div>
+
+                <div class="properties-content" id="properties-content">
+                    <div class="placeholder-message">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 48px; height: 48px; opacity: 0.3;">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <p data-i18n="selectElement">Select an element to edit properties</p>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- FOOTER -->
+        <footer style="position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; padding: 5px; background-color: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.75em; border-top: 1px solid var(--border-color);">
+            Created by Q-Support Marcin Szymański
+        </footer>
+    </div>
+
+    <!-- MODALS -->
+    <!-- Open Template Modal -->
+    <div id="open-template-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px; height: 600px;">
+            <div class="modal-header">
+                <h3 data-i18n="openTemplate">Open Template</h3>
+                <button class="btn" id="btn-close-open-modal">✖</button>
+            </div>
+            <div class="modal-body">
+                <div id="templates-grid" class="templates-grid">
+                    <!-- Template thumbnails will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="report.js"></script>
+</body>
+</html>
