@@ -7,7 +7,8 @@ const reportState = {
         rootHandle: null,
         name: 'No Project Selected',
         maps: [],
-        records: []
+        records: [],
+        currentRecordIndex: 0  // Track current record
     },
     ui: {
         theme: localStorage.getItem('theme') || 'light',
@@ -109,6 +110,128 @@ function updateProjectDisplay() {
     if (el) el.textContent = reportState.project.name;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DATA MANAGER - Record Navigation
+// ════════════════════════════════════════════════════════════════════════════
+
+function setCurrentRecord(index) {
+    if (index < 0 || index >= reportState.project.records.length) {
+        console.warn('⚠️ Invalid record index:', index);
+        return;
+    }
+    
+    reportState.project.currentRecordIndex = index;
+    updateRecordCounter();
+    updateRecordSelector();
+    refreshAllDynamicElements();
+    
+    console.log(`📊 Switched to record ${index + 1}/${reportState.project.records.length}`);
+}
+
+function populateRecordSelector() {
+    const selector = document.getElementById('record-selector');
+    if (!selector) return;
+    
+    const records = reportState.project.records;
+    if (!records || records.length === 0) {
+        selector.innerHTML = '<option value="">-- No records loaded --</option>';
+        return;
+    }
+    
+    // Clear existing options
+    selector.innerHTML = '';
+    
+    // Add options for each record
+    records.forEach((record, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        
+        // Format: "✅ QR: 1234 | 2025-10-13 | OK | 4 MPs"
+        const statusIcon = record.overallStatus === 'OK' ? '✅' : '❌';
+        const qr = record.qrCode || 'N/A';
+        const date = record.measurementDate || 'N/A';
+        const status = record.overallStatus || 'N/A';
+        const mpCount = record.measurements ? record.measurements.filter(m => m.Value).length : 0;
+        
+        option.textContent = `${statusIcon} QR: ${qr} | ${date} | ${status} | ${mpCount} MPs`;
+        selector.appendChild(option);
+    });
+    
+    // Select current record
+    selector.value = reportState.project.currentRecordIndex;
+    
+    console.log(`📋 Populated selector with ${records.length} records`);
+}
+
+function updateRecordSelector() {
+    const selector = document.getElementById('record-selector');
+    if (selector) {
+        selector.value = reportState.project.currentRecordIndex;
+    }
+}
+
+function updateRecordCounter() {
+    const counter = document.getElementById('record-counter');
+    if (!counter) return;
+    
+    const records = reportState.project.records;
+    const current = reportState.project.currentRecordIndex + 1;
+    const total = records.length;
+    
+    counter.textContent = `${current} / ${total}`;
+}
+
+function setupRecordSelector() {
+    const selector = document.getElementById('record-selector');
+    const btnPrev = document.getElementById('btn-prev-record');
+    const btnNext = document.getElementById('btn-next-record');
+    
+    if (!selector || !btnPrev || !btnNext) {
+        console.warn('⚠️ Record selector elements not found');
+        return;
+    }
+    
+    // Dropdown change handler
+    selector.addEventListener('change', (e) => {
+        const index = parseInt(e.target.value);
+        if (!isNaN(index)) {
+            setCurrentRecord(index);
+        }
+    });
+    
+    // Previous button
+    btnPrev.addEventListener('click', () => {
+        const newIndex = reportState.project.currentRecordIndex - 1;
+        if (newIndex >= 0) {
+            setCurrentRecord(newIndex);
+        }
+    });
+    
+    // Next button
+    btnNext.addEventListener('click', () => {
+        const newIndex = reportState.project.currentRecordIndex + 1;
+        if (newIndex < reportState.project.records.length) {
+            setCurrentRecord(newIndex);
+        }
+    });
+    
+    // Initialize
+    populateRecordSelector();
+    updateRecordCounter();
+    
+    console.log('✅ Record selector initialized');
+}
+
+function refreshAllDynamicElements() {
+    // Refresh all elements on the canvas that use dynamic data
+    document.querySelectorAll('.canvas-element').forEach(element => {
+        const type = element.dataset.type;
+        if (['date', 'time', 'user', 'schemaName', 'schemaVersion', 'qrCode', 'status', 'table'].includes(type)) {
+            element.innerHTML = getElementContent(type);
+        }
+    });
+}
+
 function setupEventListeners() {
     document.getElementById('btn-back-to-main')?.addEventListener('click', () => window.location.href = 'index.html');
     document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
@@ -137,6 +260,7 @@ function setupEventListeners() {
     setupDragAndDrop();
     setupKeyboardShortcuts();
     setupCanvasClickHandler();
+    setupRecordSelector();
 }
 
 function newTemplate() {
@@ -225,9 +349,9 @@ function generateUniqueId() {
 }
 
 function getElementContent(type) {
-    // Get current record data if available
+    // Get current record data based on currentRecordIndex
     const currentRecord = reportState.project.records && reportState.project.records.length > 0 
-        ? reportState.project.records[0] 
+        ? reportState.project.records[reportState.project.currentRecordIndex] 
         : null;
     
     const templates = {
@@ -257,11 +381,26 @@ function getElementContent(type) {
     return templates[type] || '<div class="element-field">Unknown Element</div>';
 }
 
-// Render measurement table with full columns
+// Auto-Adaptive Render measurement table
 function renderMeasurementTable(measurements) {
     if (!measurements || measurements.length === 0) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📋 No measurements available</div>';
     }
+    
+    // Filter out empty measurements (skip if no Value)
+    const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+    
+    if (validMeasurements.length === 0) {
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📋 No valid measurements</div>';
+    }
+    
+    // Count OK and NOK
+    let okCount = 0;
+    let nokCount = 0;
+    validMeasurements.forEach(m => {
+        if (m.Status === 'OK') okCount++;
+        else nokCount++;
+    });
     
     let html = '<div style="overflow:auto;max-height:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
     html += '<thead><tr style="background:var(--bg-tertiary);font-weight:bold;position:sticky;top:0;">';
@@ -275,7 +414,8 @@ function renderMeasurementTable(measurements) {
     html += '<th style="border:1px solid var(--border-color);padding:6px;text-align:center;min-width:70px;">Status</th>';
     html += '</tr></thead><tbody>';
     
-    measurements.forEach((m, index) => {
+    // Render only valid measurements with alternating row colors
+    validMeasurements.forEach((m, index) => {
         const statusIcon = m.Status === 'OK' ? '✅' : '❌';
         const statusColor = m.Status === 'OK' ? '#34c759' : '#ff3b30';
         const rowBg = index % 2 === 0 ? 'var(--bg-secondary)' : 'transparent';
@@ -292,7 +432,16 @@ function renderMeasurementTable(measurements) {
         html += '</tr>';
     });
     
-    html += '</tbody></table></div>';
+    // Add summary footer
+    html += '</tbody><tfoot>';
+    html += '<tr style="background:var(--bg-tertiary);font-weight:bold;border-top:2px solid var(--border-color);">';
+    html += `<td colspan="8" style="border:1px solid var(--border-color);padding:8px;text-align:left;">`;
+    html += `<strong>Total: ${validMeasurements.length} MPs</strong> | `;
+    html += `<span style="color:#34c759;">✅ ${okCount}</span> | `;
+    html += `<span style="color:#ff3b30;">❌ ${nokCount}</span>`;
+    html += '</td>';
+    html += '</tr>';
+    html += '</tfoot></table></div>';
     return html;
 }
 

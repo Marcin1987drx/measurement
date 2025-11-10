@@ -249,6 +249,19 @@
                     </div>
                 </div>
 
+                <!-- Record Selector Panel -->
+                <div id="record-selector-panel" style="background: var(--bg-secondary); padding: 16px; margin-bottom: 16px; border-radius: 8px;">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <label style="font-weight: 600;">📊 Select Record:</label>
+                        <select id="record-selector" style="flex: 1; max-width: 500px; padding: 8px; border-radius: 4px;">
+                            <option value="">-- No records loaded --</option>
+                        </select>
+                        <button id="btn-prev-record" class="btn btn-secondary">◀ Prev</button>
+                        <button id="btn-next-record" class="btn btn-secondary">Next ▶</button>
+                        <span id="record-counter" style="font-weight: 600;">0 / 0</span>
+                    </div>
+                </div>
+
                 <!-- CANVAS AREA -->
                 <div class="canvas-wrapper" id="canvas-wrapper">
                     <div class="canvas-container" id="canvas-container">
