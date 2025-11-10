@@ -84,17 +84,23 @@ function changeLanguage(lang) {
 
 function loadProjectData() {
     try {
-        const projectDataStr = sessionStorage.getItem('measurementProject');
+        // Changed from sessionStorage to localStorage
+        const projectDataStr = localStorage.getItem('measurementProject');
         if (projectDataStr) {
             const projectData = JSON.parse(projectDataStr);
             reportState.project.name = projectData.name || 'Unknown Project';
             reportState.project.maps = projectData.maps || [];
             reportState.project.records = projectData.records || [];
             updateProjectDisplay();
-            console.log(`📁 Project: ${reportState.project.name}`);
+            console.log(`📊 Data Manager: Loaded ${reportState.project.records.length} records from "${reportState.project.name}"`);
+            console.log('📋 Sample record:', reportState.project.records[0]);
+        } else {
+            console.warn('⚠️ No project data found in localStorage. Please select a project in the main app first.');
+            reportState.project.records = [];
         }
     } catch (error) {
-        console.error('❌ Error loading project:', error);
+        console.error('❌ Error loading project data:', error);
+        reportState.project.records = [];
     }
 }
 
