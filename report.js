@@ -772,7 +772,8 @@ function setupKeyboardShortcuts() {
         if (!selected) return;
         
         // Ignore if typing in input/textarea/contenteditable
-        if (e.target.matches('input, textarea, [contenteditable="true"]')) return;
+        const target = e.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
         
         switch(e.key) {
             case 'Delete':
