@@ -387,6 +387,142 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================
+    // [SECTION] INDEXEDDB HELPERS
+    // =========================================
+    
+    /**
+     * Open or create the IndexedDB database for storing directory handles
+     * @returns {Promise<IDBDatabase>} The opened database
+     */
+    const openHandlesDB = () => {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('MeasurementHandlesDB', 1);
+            
+            request.onerror = () => {
+                console.error('❌ Failed to open IndexedDB:', request.error);
+                reject(request.error);
+            };
+            
+            request.onsuccess = () => {
+                console.log('✅ IndexedDB opened successfully');
+                resolve(request.result);
+            };
+            
+            request.onupgradeneeded = (event) => {
+                console.log('🔧 Upgrading IndexedDB schema...');
+                const db = event.target.result;
+                
+                // Create object store for directory handles if it doesn't exist
+                if (!db.objectStoreNames.contains('directoryHandles')) {
+                    db.createObjectStore('directoryHandles', { keyPath: 'id' });
+                    console.log('✅ Created directoryHandles object store');
+                }
+            };
+        });
+    };
+
+    /**
+     * Save a directory handle to IndexedDB
+     * @param {FileSystemDirectoryHandle} handle - The directory handle to save
+     * @returns {Promise<void>}
+     */
+    const saveHandleToIndexedDB = async (handle) => {
+        try {
+            const db = await openHandlesDB();
+            const transaction = db.transaction(['directoryHandles'], 'readwrite');
+            const store = transaction.objectStore('directoryHandles');
+            
+            // Store the handle with a fixed key 'lastProject'
+            const data = {
+                id: 'lastProject',
+                handle: handle,
+                name: handle.name,
+                savedAt: Date.now()
+            };
+            
+            store.put(data);
+            
+            return new Promise((resolve, reject) => {
+                transaction.oncomplete = () => {
+                    console.log('✅ Directory handle saved to IndexedDB:', handle.name);
+                    db.close();
+                    resolve();
+                };
+                
+                transaction.onerror = () => {
+                    console.error('❌ Failed to save handle to IndexedDB:', transaction.error);
+                    db.close();
+                    reject(transaction.error);
+                };
+            });
+        } catch (error) {
+            console.error('❌ Error in saveHandleToIndexedDB:', error);
+            throw error;
+        }
+    };
+
+    /**
+     * Retrieve the saved directory handle from IndexedDB
+     * @returns {Promise<FileSystemDirectoryHandle|null>} The saved handle or null if not found
+     */
+    const getHandleFromIndexedDB = async () => {
+        try {
+            const db = await openHandlesDB();
+            const transaction = db.transaction(['directoryHandles'], 'readonly');
+            const store = transaction.objectStore('directoryHandles');
+            
+            return new Promise((resolve, reject) => {
+                const request = store.get('lastProject');
+                
+                request.onsuccess = async () => {
+                    db.close();
+                    
+                    if (!request.result || !request.result.handle) {
+                        console.log('ℹ️ No saved directory handle found');
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const savedHandle = request.result.handle;
+                    
+                    // Verify we still have permission to access this handle
+                    try {
+                        const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
+                        
+                        if (permission === 'granted') {
+                            console.log('✅ Retrieved directory handle from IndexedDB:', savedHandle.name);
+                            resolve(savedHandle);
+                        } else {
+                            console.log('⚠️ No permission for saved handle, requesting permission...');
+                            const newPermission = await savedHandle.requestPermission({ mode: 'readwrite' });
+                            
+                            if (newPermission === 'granted') {
+                                console.log('✅ Permission granted for saved handle');
+                                resolve(savedHandle);
+                            } else {
+                                console.log('❌ Permission denied for saved handle');
+                                resolve(null);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ Error verifying handle permission:', error);
+                        resolve(null);
+                    }
+                };
+                
+                request.onerror = () => {
+                    console.error('❌ Failed to retrieve handle from IndexedDB:', request.error);
+                    db.close();
+                    reject(request.error);
+                };
+            });
+        } catch (error) {
+            console.error('❌ Error in getHandleFromIndexedDB:', error);
+            return null;
+        }
+    };
+
+    // =========================================
     // [SECTION] CORE FUNCTIONS
     // =========================================
     const scanProjectFolder = async () => {
@@ -2321,6 +2457,14 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.btnProjectFolder.classList.remove('needs-action');
             await scanProjectFolder();
             
+            // Save directory handle to IndexedDB for persistence
+            try {
+                await saveHandleToIndexedDB(appState.projectRootHandle);
+            } catch (err) {
+                console.error('❌ Error saving handle to IndexedDB:', err);
+                // Non-fatal error, continue
+            }
+            
             // Save project data to localStorage for Report Studio
             try {
                 console.log('📊 Saving project to localStorage...');
@@ -2532,45 +2676,76 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!appState.projectRootHandle) dom.btnProjectFolder.classList.add('needs-action');
     updateUIStrings();
     
-    // Load last used project from localStorage on startup
-    const loadLastProject = () => {
+    // Load last used project from localStorage and IndexedDB on startup
+    const loadLastProject = async () => {
         try {
-            const projectDataStr = localStorage.getItem('measurementProject');
-            if (projectDataStr) {
-                const projectData = JSON.parse(projectDataStr);
-                
-                // Clear any existing content first to prevent duplicates
-                dom.projectFolderName.innerHTML = '';
-                
-                // Add project name as text node (safe from XSS)
-                dom.projectFolderName.appendChild(document.createTextNode(projectData.name || 'Unknown Project'));
-                
+            // Try to restore the directory handle from IndexedDB
+            const savedHandle = await getHandleFromIndexedDB();
+            
+            if (savedHandle) {
+                // Successfully restored handle with permission
+                appState.projectRootHandle = savedHandle;
+                dom.projectFolderName.textContent = savedHandle.name;
                 dom.btnProjectFolder.classList.remove('needs-action');
                 
-                const lastAccessDate = new Date(projectData.lastAccess).toLocaleString();
-                console.log(`📁 Last project loaded: ${projectData.name} (last access: ${lastAccessDate})`);
+                console.log('🎉 Auto-restored project folder:', savedHandle.name);
                 
-                // Add hint with unique class to prevent duplicates
-                const hint = document.createElement('small');
-                hint.className = 'last-access-hint';
-                hint.textContent = ` (Last accessed: ${lastAccessDate})`;
-                hint.style.color = 'var(--text-secondary)';
-                hint.style.fontSize = '0.8em';
-                hint.style.marginLeft = '8px';
-                dom.projectFolderName.appendChild(hint);
-                
-                // Add helpful message about re-selecting folder
-                const infoIcon = document.createElement('span');
-                infoIcon.textContent = ' ℹ️';
-                infoIcon.title = 'To access database and maps, please re-select the project folder';
-                infoIcon.style.cursor = 'help';
-                dom.projectFolderName.appendChild(infoIcon);
+                // Scan the project folder to load data
+                try {
+                    await scanProjectFolder();
+                    
+                    // Add success indicator
+                    const successIcon = document.createElement('span');
+                    successIcon.textContent = ' ✓';
+                    successIcon.style.color = '#34c759';
+                    successIcon.style.fontWeight = 'bold';
+                    successIcon.title = 'Folder automatically restored - full access';
+                    dom.projectFolderName.appendChild(successIcon);
+                    
+                } catch (err) {
+                    console.error('❌ Error scanning restored folder:', err);
+                    // Still show the folder name but indicate it needs attention
+                    dom.btnProjectFolder.classList.add('needs-action');
+                }
+            } else {
+                // No saved handle or permission denied - try localStorage for display
+                const projectDataStr = localStorage.getItem('measurementProject');
+                if (projectDataStr) {
+                    const projectData = JSON.parse(projectDataStr);
+                    
+                    // Clear any existing content first to prevent duplicates
+                    dom.projectFolderName.innerHTML = '';
+                    
+                    // Add project name as text node (safe from XSS)
+                    dom.projectFolderName.appendChild(document.createTextNode(projectData.name || 'Unknown Project'));
+                    
+                    dom.btnProjectFolder.classList.remove('needs-action');
+                    
+                    const lastAccessDate = new Date(projectData.lastAccess).toLocaleString();
+                    console.log(`📁 Last project loaded from localStorage: ${projectData.name} (last access: ${lastAccessDate})`);
+                    
+                    // Add hint with unique class to prevent duplicates
+                    const hint = document.createElement('small');
+                    hint.className = 'last-access-hint';
+                    hint.textContent = ` (Last accessed: ${lastAccessDate})`;
+                    hint.style.color = 'var(--text-secondary)';
+                    hint.style.fontSize = '0.8em';
+                    hint.style.marginLeft = '8px';
+                    dom.projectFolderName.appendChild(hint);
+                    
+                    // Add helpful message about re-selecting folder
+                    const infoIcon = document.createElement('span');
+                    infoIcon.textContent = ' ℹ️';
+                    infoIcon.title = 'To access database and maps, please re-select the project folder';
+                    infoIcon.style.cursor = 'help';
+                    dom.projectFolderName.appendChild(infoIcon);
+                }
             }
         } catch (error) {
             console.error('❌ Error loading last project:', error);
         }
     };
 
-    // Call on startup
+    // Call on startup (async)
     loadLastProject();
 });
