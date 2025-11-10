@@ -237,18 +237,34 @@ function setupEventListeners() {
     document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
     document.getElementById('language-toggle')?.addEventListener('change', (e) => changeLanguage(e.target.value));
     
-    document.getElementById('btn-new-template')?.addEventListener('click', newTemplate);
-    document.getElementById('btn-open-template')?.addEventListener('click', openTemplate);
-    document.getElementById('btn-save-template')?.addEventListener('click', saveTemplate);
-    document.getElementById('btn-preview')?.addEventListener('click', () => console.log('👁️ Preview'));
-    document.getElementById('btn-generate-pdf')?.addEventListener('click', generatePDF);
+    document.getElementById('btn-new-template')?.addEventListener('click', () => {
+        console.log('📄 New Template clicked');
+        newTemplate();
+    });
+    document.getElementById('btn-open-template')?.addEventListener('click', () => {
+        console.log('📂 Load Template clicked');
+        openTemplate();
+    });
+    document.getElementById('btn-save-template')?.addEventListener('click', () => {
+        console.log('💾 Save Template clicked');
+        saveTemplate();
+    });
+    document.getElementById('btn-preview')?.addEventListener('click', () => {
+        console.log('👁️ Preview clicked');
+        showPreview();
+    });
+    document.getElementById('btn-generate-pdf')?.addEventListener('click', () => {
+        console.log('📄 Generate PDF clicked');
+        generatePDF();
+    });
     
     document.getElementById('btn-zoom-in')?.addEventListener('click', () => adjustZoom(25));
     document.getElementById('btn-zoom-out')?.addEventListener('click', () => adjustZoom(-25));
     
     document.getElementById('toggle-grid')?.addEventListener('change', (e) => {
         reportState.ui.gridEnabled = e.target.checked;
-        document.querySelectorAll('.canvas-page').forEach(p => p.classList.toggle('no-grid', !e.target.checked));
+        document.querySelectorAll('.canvas-page').forEach(p => p.classList.toggle('hide-grid', !e.target.checked));
+        console.log('Grid toggled:', e.target.checked ? 'visible' : 'hidden');
     });
     
     document.getElementById('btn-add-page')?.addEventListener('click', addPage);
@@ -261,6 +277,8 @@ function setupEventListeners() {
     setupKeyboardShortcuts();
     setupCanvasClickHandler();
     setupRecordSelector();
+    
+    console.log('✅ All toolbar button event listeners connected');
 }
 
 function newTemplate() {
@@ -275,45 +293,47 @@ function newTemplate() {
 }
 
 function openTemplate() {
-    try {
-        const templates = JSON.parse(localStorage.getItem('reportTemplates') || '{}');
-        const templateNames = Object.keys(templates);
-        
-        if (templateNames.length === 0) {
-            alert('No saved templates found. Create and save a template first.');
-            return;
+    console.log('📂 Loading template...');
+    
+    // Create a file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = async (e) => {
+        try {
+            const file = e.target.files[0];
+            if (!file) {
+                console.log('No file selected');
+                return;
+            }
+            
+            const text = await file.text();
+            const template = JSON.parse(text);
+            
+            console.log(`Loading template: ${template.meta?.name || 'Untitled'}`);
+            console.log(`Pages to load: ${template.pages?.length || 0}`);
+            
+            // Load the template
+            loadTemplateData(template);
+            
+        } catch (error) {
+            console.error('❌ Error loading template:', error);
+            alert('❌ Error loading template: ' + error.message);
         }
-        
-        // Create a simple selection dialog
-        let message = 'Select a template to load:\n\n';
-        templateNames.forEach((name, index) => {
-            const template = templates[name];
-            const savedDate = template.meta.savedAt ? new Date(template.meta.savedAt).toLocaleString() : 'Unknown';
-            message += `${index + 1}. ${name} (Saved: ${savedDate})\n`;
-        });
-        message += '\nEnter the number of the template to load:';
-        
-        const selection = prompt(message);
-        if (!selection) return;
-        
-        const index = parseInt(selection) - 1;
-        if (index < 0 || index >= templateNames.length) {
-            alert('Invalid selection.');
-            return;
-        }
-        
-        const templateName = templateNames[index];
-        loadTemplateData(templates[templateName]);
-        
-    } catch (error) {
-        console.error('❌ Error loading templates:', error);
-        alert('❌ Failed to load templates.');
-    }
+    };
+    
+    input.click();
 }
 
 function saveTemplate() {
+    console.log('💾 Starting template save...');
+    
     const name = prompt('Template name:', reportState.template.meta.name);
-    if (!name) return;
+    if (!name) {
+        console.log('Template save cancelled');
+        return;
+    }
     
     // Capture current canvas state
     const templateData = {
@@ -373,6 +393,10 @@ function saveTemplate() {
         templateData.pages.push(pageData);
     });
     
+    // Count total elements
+    const totalElements = templateData.pages.reduce((sum, page) => sum + page.components.length, 0);
+    console.log(`Template has ${templateData.pages.length} page(s) with ${totalElements} element(s)`);
+    
     // Save to localStorage template library
     try {
         let templates = JSON.parse(localStorage.getItem('reportTemplates') || '{}');
@@ -380,8 +404,18 @@ function saveTemplate() {
         localStorage.setItem('reportTemplates', JSON.stringify(templates));
         
         reportState.template.meta.name = name;
-        alert(`✅ Template "${name}" saved successfully!`);
-        console.log('💾 Template saved:', name);
+        
+        // Download as JSON file
+        const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${name.replace(/\s+/g, '_')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        console.log(`💾 Template saved and downloaded: ${name}`);
+        alert(`✅ Template "${name}" saved and downloaded!`);
     } catch (error) {
         console.error('❌ Error saving template:', error);
         alert('❌ Failed to save template. Please try again.');
@@ -1072,6 +1106,7 @@ function bringToFront(element) {
     const maxZ = Math.max(...Array.from(element.parentElement.children)
         .map(el => parseInt(el.style.zIndex) || 1));
     element.style.zIndex = maxZ + 1;
+    console.log(`✅ Brought to front: z-index = ${element.style.zIndex}`);
     updatePropertiesPanel(element);
 }
 
@@ -1079,6 +1114,7 @@ function sendToBack(element) {
     const minZ = Math.min(...Array.from(element.parentElement.children)
         .map(el => parseInt(el.style.zIndex) || 1));
     element.style.zIndex = Math.max(1, minZ - 1);
+    console.log(`✅ Sent to back: z-index = ${element.style.zIndex}`);
     updatePropertiesPanel(element);
 }
 
@@ -1234,10 +1270,105 @@ function loadTemplateData(templateData) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PREVIEW FUNCTION
+// ════════════════════════════════════════════════════════════════════════════
+
+function showPreview() {
+    console.log('👁️ Showing preview...');
+    
+    const canvasPages = document.querySelectorAll('.canvas-page');
+    if (canvasPages.length === 0) {
+        alert('No pages to preview. Add elements to the canvas first.');
+        return;
+    }
+    
+    // Build preview HTML
+    let pagesHTML = '';
+    canvasPages.forEach((page, index) => {
+        const pageContent = page.querySelector('.page-content');
+        if (pageContent) {
+            pagesHTML += `
+                <div class="preview-page" style="
+                    width: 794px;
+                    height: 1123px;
+                    margin: 20px auto;
+                    background: white;
+                    border: 1px solid #ccc;
+                    position: relative;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                    page-break-after: always;
+                ">
+                    ${pageContent.innerHTML.replace(/canvas-element/g, 'preview-element')}
+                </div>
+            `;
+        }
+    });
+    
+    const previewHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Report Preview</title>
+            <style>
+                body {
+                    margin: 0;
+                    padding: 20px;
+                    font-family: Arial, sans-serif;
+                    background: #f0f0f0;
+                }
+                h2 {
+                    text-align: center;
+                    margin-bottom: 20px;
+                }
+                .preview-element {
+                    position: absolute;
+                    border: none !important;
+                    outline: none !important;
+                }
+                .preview-element:hover {
+                    box-shadow: none !important;
+                }
+                .resize-handle {
+                    display: none !important;
+                }
+                @media print {
+                    body {
+                        background: white;
+                        padding: 0;
+                    }
+                    .preview-page {
+                        margin: 0;
+                        border: none;
+                        box-shadow: none;
+                        page-break-after: always;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <h2>Report Preview</h2>
+            ${pagesHTML}
+        </body>
+        </html>
+    `;
+    
+    const previewWindow = window.open('', 'Preview', 'width=900,height=1200,scrollbars=yes');
+    if (previewWindow) {
+        previewWindow.document.write(previewHTML);
+        previewWindow.document.close();
+        console.log('✅ Preview window opened');
+    } else {
+        alert('Failed to open preview window. Please allow pop-ups for this site.');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // PDF GENERATION
 // ════════════════════════════════════════════════════════════════════════════
 
 function generatePDF() {
+    console.log('📄 Starting PDF generation...');
+    
     try {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined') {

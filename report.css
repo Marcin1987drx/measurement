@@ -198,18 +198,29 @@
     display: flex;
     flex-direction: column;
     gap: 24px;
+    overflow: auto;
+    min-height: 800px;
+    max-height: calc(100vh - 200px);
 }
 
 .canvas-page {
     width: 794px;
     height: 1123px;
+    min-width: 210mm; /* A4 width */
+    min-height: 297mm; /* A4 height */
     background-color: var(--canvas-paper);
     box-shadow: var(--page-shadow);
     border-radius: var(--radius-sm);
     position: relative;
+    transform-origin: top left;
     background-image: 
         repeating-linear-gradient(0deg, transparent, transparent 7px, var(--grid-color) 7px, var(--grid-color) 8px),
         repeating-linear-gradient(90deg, transparent, transparent 7px, var(--grid-color) 7px, var(--grid-color) 8px);
+}
+
+/* Grid toggle */
+.canvas-page.hide-grid {
+    background-image: none !important;
 }
 
 .page-content {
