@@ -823,6 +823,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] CANVAS RENDERING
     // =========================================
+    
+    // Helper function to escape HTML to prevent XSS
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    
     const syncOverlayDimensions = () => {
         if (!dom.backgroundImg.src || !dom.backgroundImg.complete || dom.backgroundImg.naturalWidth === 0) return;
         const imgRect = dom.backgroundImg.getBoundingClientRect();
@@ -1034,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             if (anyFilled) statusClass = allOk ? 'status-ok' : 'status-error';
-            labelHtml = `<div>${mp.id} ${anyFilled ? (allOk ? '<span class="label-status status-ok-text">✅ OK</span>' : '<span class="label-status status-error-text">⚠️ NOK</span>') : ''}</div><div class="point-name">${mp.name}</div>`;
+            labelHtml = `<div>${escapeHtml(mp.id)} ${anyFilled ? (allOk ? '<span class="label-status status-ok-text">✅ OK</span>' : '<span class="label-status status-error-text">⚠️ NOK</span>') : ''}</div><div class="point-name">${escapeHtml(mp.name)}</div>`;
             if (tooltipText) label.dataset.tooltip = tooltipText.trim();
             else delete label.dataset.tooltip;
         } else {
@@ -1050,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusText = `<span class="label-status status-error-text">⚠️ NOK</span>`;
                 }
             }
-            labelHtml = `<div>${mp.id}: ${value}${mp.unit} ${statusText}</div><div class="point-name">${mp.name}</div><div class="tolerance">[${mp.min}..${mp.max}]</div>`;
+            labelHtml = `<div>${escapeHtml(mp.id)}: ${escapeHtml(value)}${escapeHtml(mp.unit)} ${statusText}</div><div class="point-name">${escapeHtml(mp.name)}</div><div class="tolerance">[${escapeHtml(mp.min.toString())}..${escapeHtml(mp.max.toString())}]</div>`;
         }
 
         // Update classes
