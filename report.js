@@ -1094,7 +1094,6 @@ function renderZoomImages(record) {
     }, 100);
     
     return html;
-    }
 }
 
 // Render auto visualization (overview + zooms)
