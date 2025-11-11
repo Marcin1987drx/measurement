@@ -1527,6 +1527,15 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('✅ localStorage updated - new measurement visible in Report Studio');
             
             await exportPNG({ fromSave: true, saveToFile: true, showAlertOnSuccess: false });
+            
+            // Generate zoom images from overview
+            console.log('✅ Overview saved, generating zooms...');
+            const qrCode = dom.qrCodeInput.value.trim();
+            const schemaName = appState.data.currentMap?.fileName;
+            if (qrCode && schemaName) {
+                await generateZoomImages(qrCode, schemaName);
+            }
+            
             dom.saveConfirmationOverlay.classList.add('visible');
             setTimeout(() => {
                 dom.saveConfirmationOverlay.classList.remove('visible');
@@ -1693,6 +1702,137 @@ document.addEventListener('DOMContentLoaded', () => {
             img.src = bgUrl;
         });
     };
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // AUTO-GENERATE ZOOM IMAGES FROM OVERVIEW + SCHEMA VIEW COORDINATES
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    async function generateZoomImages(qrCode, schemaName) {
+        console.log(`🔍 Starting zoom generation: QR=${qrCode}, Schema=${schemaName}`);
+        
+        try {
+            // 1. Get visualization directory
+            const exportsDir = await getOrCreateDir(appState.projectRootHandle, 'exports');
+            const vizDir = await getOrCreateDir(exportsDir, 'visualizations');
+            
+            // 2. Load overview image
+            const overviewHandle = await vizDir.getFileHandle(`${qrCode}.png`).catch(() => null);
+            if (!overviewHandle) {
+                console.warn(`⚠️ Overview not found: ${qrCode}.png`);
+                return;
+            }
+            
+            const overviewFile = await overviewHandle.getFile();
+            const overviewImage = await loadImageFromFile(overviewFile);
+            console.log(`✅ Overview loaded: ${overviewImage.width}x${overviewImage.height}`);
+            
+            // 3. Load schema
+            const mapsDir = await getOrCreateDir(appState.projectRootHandle, 'maps');
+            const schemaHandle = await mapsDir.getFileHandle(`${schemaName}.map.json`).catch(() => null);
+            if (!schemaHandle) {
+                console.warn(`⚠️ Schema not found: ${schemaName}.map.json`);
+                return;
+            }
+            
+            const schemaFile = await schemaHandle.getFile();
+            const schemaText = await schemaFile.text();
+            const schema = JSON.parse(schemaText);
+            
+            if (!schema.points || schema.points.length === 0) {
+                console.warn('⚠️ No points in schema');
+                return;
+            }
+            
+            console.log(`✅ Schema loaded: ${schema.points.length} MPs`);
+            
+            // 4. Generate zoom for each MP with view coords
+            let generated = 0;
+            
+            for (const mp of schema.points) {
+                if (!mp.view || !mp.view.scale) {
+                    console.log(`⏭️ Skip ${mp.id} (no view)`);
+                    continue;
+                }
+                
+                console.log(`🔍 Processing ${mp.id} (scale: ${mp.view.scale.toFixed(2)})`);
+                
+                // Crop image
+                const zoomCanvas = cropImageByView(overviewImage, mp.view);
+                
+                // Convert to blob
+                const blob = await canvasToBlob(zoomCanvas);
+                
+                // Save file
+                const filename = `${qrCode}_${mp.id}.png`;
+                const fileHandle = await vizDir.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                
+                console.log(`✅ Saved: ${filename}`);
+                generated++;
+            }
+            
+            console.log(`✅ Generated ${generated} zoom images`);
+            
+        } catch (error) {
+            console.error('❌ Zoom generation error:', error);
+        }
+    }
+
+    function cropImageByView(sourceImage, view) {
+        const { scale, offsetX, offsetY } = view;
+        
+        // Target canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 600;
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate crop region
+        const imgW = sourceImage.width;
+        const imgH = sourceImage.height;
+        
+        const centerX = imgW / 2 + (offsetX || 0);
+        const centerY = imgH / 2 + (offsetY || 0);
+        
+        const cropW = imgW / scale;
+        const cropH = imgH / scale;
+        
+        const cropX = centerX - cropW / 2;
+        const cropY = centerY - cropH / 2;
+        
+        // Draw cropped
+        ctx.drawImage(
+            sourceImage,
+            cropX, cropY, cropW, cropH,
+            0, 0, 800, 600
+        );
+        
+        return canvas;
+    }
+
+    function loadImageFromFile(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(img);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Image load failed'));
+            };
+            img.src = url;
+        });
+    }
+
+    function canvasToBlob(canvas) {
+        return new Promise(resolve => {
+            canvas.toBlob(blob => resolve(blob), 'image/png');
+        });
+    }
 
     // =========================================
     // [SECTION] FORMULA ENGINE
