@@ -2681,24 +2681,32 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTheme(isDark);
     });
 
-    dom.btnProjectFolder.addEventListener('click', async () => {
-        try {
-            appState.projectRootHandle = await window.showDirectoryPicker();
-            dom.projectFolderName.textContent = appState.projectRootHandle.name;
-            dom.btnProjectFolder.classList.remove('needs-action');
-            await scanProjectFolder();
-            
-            // Save directory handle to IndexedDB for persistence
+    async function selectProjectFolder() {
+        const fs = window.fileSystemAdapter;
+        await fs.initialize();
+        appState.fileSystem = fs;
+        appState.projectRootHandle = fs.projectRoot;
+        dom.projectFolderName.textContent = fs.projectRoot.name || fs.projectRoot;
+        dom.btnProjectFolder.classList.remove('needs-action');
+        console.log(`✅ Mode: ${fs.mode}`);
+        await scanProjectFolder();
+        
+        // Save directory handle to IndexedDB for persistence
+        if (fs.mode === 'local') {
             try {
                 await saveHandleToIndexedDB(appState.projectRootHandle);
             } catch (err) {
                 console.error('❌ Error saving handle to IndexedDB:', err);
-                // Non-fatal error, continue
             }
-            
-            // Save project data to localStorage for Report Studio
-            saveProjectToLocalStorage();
-            
+        }
+        
+        // Save project data to localStorage for Report Studio
+        saveProjectToLocalStorage();
+    }
+
+    dom.btnProjectFolder.addEventListener('click', async () => {
+        try {
+            await selectProjectFolder();
         } catch (e) {
             console.error('Error selecting project folder:', e);
         }
