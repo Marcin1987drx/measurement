@@ -250,7 +250,7 @@ function changeLanguage(lang) {
     console.log(`✅ Updated ${i18nElements.length} UI elements with ${lang} translations`);
 }
 
-function loadProjectData() {
+async function loadProjectData() {
     try {
         // Changed from sessionStorage to localStorage
         const projectDataStr = localStorage.getItem('measurementProject');
@@ -259,6 +259,21 @@ function loadProjectData() {
             reportState.project.name = projectData.name || 'Unknown Project';
             reportState.project.maps = projectData.maps || [];
             reportState.project.records = projectData.records || [];
+            
+            // Initialize File System Access API
+            const fs = window.fileSystemAdapter;
+            if (fs) {
+                try {
+                    await fs.initialize(); // This will restore saved handle or prompt user
+                    reportState.project.rootHandle = fs.projectRoot;
+                    console.log('✅ File System initialized for images');
+                } catch (initError) {
+                    console.warn('⚠️ File System Access not initialized:', initError);
+                }
+            } else {
+                console.warn('⚠️ fileSystemAdapter not available');
+            }
+            
             updateProjectDisplay();
             console.log(`📊 Data Manager: Loaded ${reportState.project.records.length} records from "${reportState.project.name}"`);
             console.log('📋 Sample record:', reportState.project.records[0]);
@@ -974,41 +989,46 @@ function renderMeasurementChart(measurements) {
 // Render overview image from project folder
 function renderOverviewImage(record) {
     if (!record || !record.qrCode) {
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No record data</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;">📷 No record</div>';
     }
     
-    try {
-        const projectDataStr = localStorage.getItem('measurementProject');
-        if (!projectDataStr) {
-            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No project loaded</div>';
-        }
-        
-        const projectData = JSON.parse(projectDataStr);
-        const projectName = projectData.name || 'Unknown';
-        const overviewPath = `exports/visualizations/${record.qrCode}.png`;
-        
-        const id = `img-${Date.now()}`;
-        setTimeout(async () => {
-            try {
-                const fs = window.fileSystemAdapter;
-                const url = await fs.getImageURL(overviewPath);
-                const imgEl = document.getElementById(id);
-                if (imgEl) {
-                    imgEl.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Overview">`;
-                }
-            } catch (e) {
-                console.warn('📷 Overview image not found:', overviewPath, e);
-                const imgEl = document.getElementById(id);
-                if (imgEl) {
-                    imgEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">📷 Image not found</div>';
-                }
+    const id = `img-overview-${Date.now()}`;
+    
+    // Schedule async image load
+    setTimeout(async () => {
+        try {
+            const fs = window.fileSystemAdapter;
+            if (!fs || !fs.projectRoot) {
+                throw new Error('File System not initialized');
             }
-        }, 50);
-        return `<div id="${id}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>`;
-    } catch (error) {
-        console.error('Error rendering overview image:', error);
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 Error loading image</div>';
-    }
+            
+            // Navigate: projectRoot → exports → visualizations → {qrCode}.png
+            const exportsDir = await fs.projectRoot.getDirectoryHandle('exports');
+            const vizDir = await exportsDir.getDirectoryHandle('visualizations');
+            const imageFile = await vizDir.getFileHandle(`${record.qrCode}.png`);
+            const file = await imageFile.getFile();
+            const url = URL.createObjectURL(file);
+            
+            const imgEl = document.getElementById(id);
+            if (imgEl) {
+                imgEl.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Overview">`;
+                console.log(`✅ Loaded overview: ${record.qrCode}.png`);
+            }
+        } catch (error) {
+            console.error('❌ Failed to load overview image:', error);
+            const imgEl = document.getElementById(id);
+            if (imgEl) {
+                imgEl.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text-secondary);">
+                    📷 Image not found<br>
+                    <small>${error.message}</small>
+                </div>`;
+            }
+        }
+    }, 100);
+    
+    return `<div id="${id}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+        ⏳ Loading image...
+    </div>`;
 }
 
 // Render zoom images from project folder
@@ -1022,56 +1042,58 @@ function renderZoomImages(record) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements</div>';
     }
     
-    try {
-        const projectDataStr = localStorage.getItem('measurementProject');
-        if (!projectDataStr) {
-            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No project loaded</div>';
-        }
-        
-        const projectData = JSON.parse(projectDataStr);
-        const projectName = projectData.name || 'Unknown';
-        
-        const containerId = `zoom-container-${Date.now()}`;
-        const baseImgId = `zoom-img-${Date.now()}`;
-        
-        let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
-        
-        measurements.forEach((m, idx) => {
-            const imgId = `${baseImgId}-${idx}`;
-            html += `
-                <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
-                    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
-                    <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">⏳</div>
-                </div>
-            `;
-        });
-        
-        html += '</div>';
-        
-        setTimeout(async () => {
+    const containerId = `zoom-container-${Date.now()}`;
+    const baseImgId = `zoom-img-${Date.now()}`;
+    
+    let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
+    
+    measurements.forEach((m, idx) => {
+        const imgId = `${baseImgId}-${idx}`;
+        html += `
+            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
+                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
+                <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">⏳</div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    
+    // Schedule async image load
+    setTimeout(async () => {
+        try {
             const fs = window.fileSystemAdapter;
+            if (!fs || !fs.projectRoot) {
+                throw new Error('File System not initialized');
+            }
+            
+            // Navigate: projectRoot → exports → visualizations
+            const exportsDir = await fs.projectRoot.getDirectoryHandle('exports');
+            const vizDir = await exportsDir.getDirectoryHandle('visualizations');
+            
             for (let idx = 0; idx < measurements.length; idx++) {
                 const m = measurements[idx];
                 const imgId = `${baseImgId}-${idx}`;
                 const imgEl = document.getElementById(imgId);
                 if (imgEl) {
                     try {
-                        const zoomPath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
-                        const url = await fs.getImageURL(zoomPath);
+                        const imageFile = await vizDir.getFileHandle(`${record.qrCode}_${m.MP_ID}.png`);
+                        const file = await imageFile.getFile();
+                        const url = URL.createObjectURL(file);
                         imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
+                        console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
                     } catch (e) {
                         console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
                         imgEl.innerHTML = '<div style="padding:20px;font-size:10px;color:var(--text-secondary);">🔍 Not available</div>';
                     }
                 }
             }
-        }, 50);
-        
-        return html;
-    } catch (error) {
-        console.error('Error rendering zoom images:', error);
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 Error loading images</div>';
-    }
+        } catch (error) {
+            console.error('❌ Failed to load zoom images:', error);
+        }
+    }, 100);
+    
+    return html;
 }
 
 // Render auto visualization (overview + zooms)
