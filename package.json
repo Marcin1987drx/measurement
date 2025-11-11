@@ -1,0 +1,24 @@
+{
+  "name": "measurement-app-server",
+  "version": "1.0.0",
+  "description": "Universal File System Adapter - Server Mode Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "measurement",
+    "file-system",
+    "adapter",
+    "express"
+  ],
+  "author": "Marcin Szymański",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

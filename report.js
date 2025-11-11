@@ -818,17 +818,17 @@ function renderOverviewImage(record) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No record data</div>';
     }
     
-    const overviewPath = `exports/visualizations/${record.qrCode}.png`;
-    
-    return `
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-            <img src="${overviewPath}" 
-                 alt="Overview ${record.qrCode}" 
-                 style="max-width:100%;max-height:100%;object-fit:contain;" 
-                 onerror="this.parentElement.innerHTML='<div style=\\'padding:16px;text-align:center;color:var(--text-secondary);\\'>📷 Not found: ${record.qrCode}.png</div>'"
-                 onload="console.log('✅ Overview loaded: ${record.qrCode}.png')">
-        </div>
-    `;
+    const id = `img-${Date.now()}`;
+    setTimeout(async () => {
+        try {
+            const fs = window.fileSystemAdapter;
+            const url = await fs.getImageURL(`exports/visualizations/${record.qrCode}.png`);
+            document.getElementById(id).innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+        } catch (e) {
+            document.getElementById(id).innerHTML = '📷 Not found';
+        }
+    }, 50);
+    return `<div id="${id}">⏳ Loading...</div>`;
 }
 
 // Render zoom images from project folder
@@ -842,21 +842,38 @@ function renderZoomImages(record) {
         return '<div class="element-field">🔍 No measurements</div>';
     }
     
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">';
+    const containerId = `zoom-container-${Date.now()}`;
+    let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
     
-    measurements.forEach(m => {
-        const zoomPath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
+    measurements.forEach((m, idx) => {
+        const imgId = `zoom-img-${Date.now()}-${idx}`;
         html += `
             <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
                 <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
-                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;" 
-                     onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;font-size:10px;color:var(--text-secondary);\\'>🔍 Not generated</div>'"
-                     onload="console.log('✅ Zoom loaded: ${m.MP_ID}')">
+                <div id="${imgId}">⏳</div>
             </div>
         `;
     });
     
     html += '</div>';
+    
+    setTimeout(async () => {
+        const fs = window.fileSystemAdapter;
+        for (let idx = 0; idx < measurements.length; idx++) {
+            const m = measurements[idx];
+            const imgId = `zoom-img-${Date.now()}-${idx}`;
+            const imgEl = document.getElementById(imgId);
+            if (imgEl) {
+                try {
+                    const url = await fs.getImageURL(`exports/visualizations/${record.qrCode}_${m.MP_ID}.png`);
+                    imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
+                } catch (e) {
+                    imgEl.innerHTML = '<div style="padding:20px;font-size:10px;color:var(--text-secondary);">🔍 Not generated</div>';
+                }
+            }
+        }
+    }, 50);
+    
     return html;
 }
 
