@@ -1526,7 +1526,13 @@ document.addEventListener('DOMContentLoaded', () => {
             saveProjectToLocalStorage(); // Update localStorage with latest data
             console.log('✅ localStorage updated - new measurement visible in Report Studio');
             
-            await exportPNG({ fromSave: true, saveToFile: true, showAlertOnSuccess: false });
+            await exportPNG({ 
+                fromSave: true, 
+                saveToFile: true, 
+                showAlertOnSuccess: false,
+                recordData: rec,
+                mapData: appState.data.currentMap
+            });
             
             // Generate zoom images from overview
             console.log('✅ Overview saved, generating zooms...');
@@ -1576,7 +1582,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0, nw, nh);
                 URL.revokeObjectURL(bgUrl);
                 const cRec = recordData;
-                const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${colName}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value);
+                const getVal = (mpId, colName, colIndex) => {
+                    if (cRec) {
+                        return colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`];
+                    } else {
+                        return colName ? 
+                            document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${colIndex}"]`)?.value :
+                            document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value;
+                    }
+                };
                 cMap.points.forEach(mp => {
                     (mp.arrows||[{x1:mp.x1,y1:mp.y1,x2:mp.x2,y2:mp.y2,style:mp.style}]).forEach(a => {
                         if(!a.x1) return;
@@ -1608,7 +1622,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(mp.type==='table') {
                         let any=false, allOk=true;
                         (mp.columns||[]).forEach((c, i) => {
-                            const v = getVal(mp.id, i);
+                            const v = getVal(mp.id, c.name, i);
                             if(v && v.trim()!=='') {
                                 any=true;
                                 const n=parseFloat(v.replace(',','.'));
