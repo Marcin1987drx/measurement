@@ -89,7 +89,8 @@ const translations = {
         generator: 'Generator',
         addPage: 'Add Page',
         properties: 'Properties',
-        selectElement: 'Select an element to edit properties'
+        selectElement: 'Select an element to edit properties',
+        searchComponents: 'Search components...'
     },
     pl: {
         backToMain: 'Powrót do głównej',
@@ -130,7 +131,8 @@ const translations = {
         generator: 'Generator',
         addPage: 'Dodaj stronę',
         properties: 'Właściwości',
-        selectElement: 'Wybierz element, aby edytować właściwości'
+        selectElement: 'Wybierz element, aby edytować właściwości',
+        searchComponents: 'Szukaj komponentów...'
     },
     de: {
         backToMain: 'Zurück zur Hauptseite',
@@ -171,7 +173,8 @@ const translations = {
         generator: 'Generator',
         addPage: 'Seite hinzufügen',
         properties: 'Eigenschaften',
-        selectElement: 'Wählen Sie ein Element zum Bearbeiten der Eigenschaften'
+        selectElement: 'Wählen Sie ein Element zum Bearbeiten der Eigenschaften',
+        searchComponents: 'Komponenten suchen...'
     }
 };
 
@@ -2094,14 +2097,15 @@ function generatePDF() {
     console.log('📄 Starting PDF generation...');
     
     try {
-        // Check if jsPDF is loaded
-        if (typeof window.jspdf === 'undefined') {
-            alert('❌ jsPDF library not loaded. Please refresh the page.');
-            console.error('❌ jsPDF not available');
+        // Check if jsPDF is loaded (try both window.jspdf and window.jsPDF)
+        if (typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined') {
+            console.error('❌ jsPDF not available. Checking if library is loading...');
+            alert('❌ jsPDF library not loaded. Please refresh the page and try again.');
             return;
         }
         
-        const { jsPDF } = window.jspdf;
+        // Support both window.jspdf and window.jsPDF
+        const { jsPDF } = window.jspdf || { jsPDF: window.jsPDF };
         const doc = new jsPDF({
             orientation: reportState.template.meta.orientation || 'portrait',
             unit: 'mm',
