@@ -226,10 +226,52 @@ function refreshAllDynamicElements() {
     // Refresh all elements on the canvas that use dynamic data
     document.querySelectorAll('.canvas-element').forEach(element => {
         const type = element.dataset.type;
-        if (['date', 'time', 'user', 'schemaName', 'schemaVersion', 'qrCode', 'status', 'table'].includes(type)) {
+        if (['date', 'time', 'user', 'schemaName', 'schemaVersion', 'qrCode', 'status', 'table', 'chart'].includes(type)) {
             element.innerHTML = getElementContent(type);
         }
     });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COMPONENT SEARCH
+// ════════════════════════════════════════════════════════════════════════════
+
+function setupComponentSearch() {
+    const searchInput = document.getElementById('component-search');
+    if (!searchInput) {
+        console.warn('⚠️ Component search input not found');
+        return;
+    }
+    
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+        const componentItems = document.querySelectorAll('.component-item');
+        
+        componentItems.forEach(item => {
+            const componentName = item.querySelector('.component-name');
+            if (componentName) {
+                const name = componentName.textContent.toLowerCase();
+                if (name.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        // Show/hide category headers based on visible items
+        document.querySelectorAll('.component-category').forEach(category => {
+            const visibleItems = category.querySelectorAll('.component-item[style*="display: flex"]');
+            const categoryHeader = category.querySelector('.category-header');
+            if (visibleItems.length === 0 && searchTerm !== '') {
+                if (categoryHeader) categoryHeader.style.display = 'none';
+            } else {
+                if (categoryHeader) categoryHeader.style.display = 'flex';
+            }
+        });
+    });
+    
+    console.log('✅ Component search initialized');
 }
 
 function setupEventListeners() {
@@ -277,6 +319,7 @@ function setupEventListeners() {
     setupKeyboardShortcuts();
     setupCanvasClickHandler();
     setupRecordSelector();
+    setupComponentSearch();
     
     console.log('✅ All toolbar button event listeners connected');
 }
@@ -498,7 +541,7 @@ function getElementContent(type) {
         rectangle: '<div style="width: 100%; height: 100%; border: 2px solid #000;"></div>',
         date: `<div class="element-field"><strong>Date:</strong> ${currentRecord ? currentRecord.measurementDate : '2025-11-10'}</div>`,
         time: `<div class="element-field"><strong>Time:</strong> ${currentRecord ? currentRecord.measurementTime : '09:55'}</div>`,
-        user: `<div class="element-field"><strong>User:</strong> ${currentRecord ? currentRecord.inspector : 'Inspector'}</div>`,
+        user: `<div class="element-field"><strong>User:</strong> ${localStorage.getItem('username') || 'Marcin1987drx'}</div>`,
         schemaName: `<div class="element-field"><strong>Schema:</strong> ${currentRecord ? currentRecord.schemaName : 'Test Schema'}</div>`,
         schemaVersion: `<div class="element-field"><strong>Version:</strong> ${currentRecord ? currentRecord.schemaVersion : '1.0'}</div>`,
         qrCode: `<div class="element-field">🔲 ${currentRecord ? currentRecord.qrCode : 'QR Code'}</div>`,
@@ -506,11 +549,13 @@ function getElementContent(type) {
         table: currentRecord && currentRecord.measurements && currentRecord.measurements.length > 0 
             ? renderMeasurementTable(currentRecord.measurements)
             : '<div class="element-field">📋 Measurement Table</div>',
-        chart: '<div class="element-field">📈 Chart</div>',
+        chart: currentRecord && currentRecord.measurements && currentRecord.measurements.length > 0 
+            ? renderMeasurementChart(currentRecord.measurements)
+            : '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
-        vizOverview: '<div class="element-field">🌅 Overview Image</div>',
-        vizZooms: '<div class="element-field">🔎 Zoom Images</div>',
-        vizAuto: '<div class="element-field">🤖 Auto Visualization</div>',
+        vizOverview: currentRecord ? renderOverviewImage(currentRecord) : '<div class="element-field">🌅 Overview Image</div>',
+        vizZooms: currentRecord ? renderZoomImages(currentRecord) : '<div class="element-field">🔎 Zoom Images</div>',
+        vizAuto: currentRecord ? renderAutoVisualization(currentRecord) : '<div class="element-field">🤖 Auto Visualization</div>',
         pageNumber: '<div class="element-field">Page {page}</div>'
     };
     // Only return content if type is in the allowed templates (prevents XSS)
@@ -581,6 +626,284 @@ function renderMeasurementTable(measurements) {
     return html;
 }
 
+// Render measurement chart using Canvas API
+function renderMeasurementChart(measurements) {
+    if (!measurements || measurements.length === 0) {
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📈 No measurements available</div>';
+    }
+    
+    // Filter valid measurements
+    const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+    
+    if (validMeasurements.length === 0) {
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📈 No valid measurements</div>';
+    }
+    
+    // Create a unique ID for the canvas
+    const chartId = 'chart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    // Create canvas element
+    const html = `<canvas id="${chartId}" style="width:100%;height:100%;"></canvas>`;
+    
+    // Schedule chart rendering after DOM update
+    setTimeout(() => {
+        const canvas = document.getElementById(chartId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        // Set canvas size
+        canvas.width = canvas.offsetWidth || 400;
+        canvas.height = canvas.offsetHeight || 300;
+        
+        const width = canvas.width;
+        const height = canvas.height;
+        const padding = 40;
+        const chartWidth = width - 2 * padding;
+        const chartHeight = height - 2 * padding;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Extract data
+        const labels = validMeasurements.map(m => m.MP_ID);
+        const values = validMeasurements.map(m => parseFloat(m.Value) || 0);
+        const nominals = validMeasurements.map(m => parseFloat(m.Nominal) || 0);
+        const statuses = validMeasurements.map(m => m.Status === 'OK');
+        
+        // Find min and max for scaling
+        const allValues = [...values, ...nominals];
+        const minVal = Math.min(...allValues) * 0.9;
+        const maxVal = Math.max(...allValues) * 1.1;
+        const range = maxVal - minVal;
+        
+        // Helper function to scale Y values
+        const scaleY = (val) => {
+            return height - padding - ((val - minVal) / range) * chartHeight;
+        };
+        
+        // Helper function to scale X values
+        const scaleX = (index) => {
+            return padding + (index / (validMeasurements.length - 1)) * chartWidth;
+        };
+        
+        // Draw axes
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.stroke();
+        
+        // Draw grid lines
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 0.5;
+        const numGridLines = 5;
+        for (let i = 0; i <= numGridLines; i++) {
+            const y = padding + (i / numGridLines) * chartHeight;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.stroke();
+        }
+        
+        // Draw nominal line
+        ctx.strokeStyle = '#ffa500';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        for (let i = 0; i < validMeasurements.length; i++) {
+            const x = scaleX(i);
+            const y = scaleY(nominals[i]);
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw measurement line
+        ctx.strokeStyle = '#007aff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < validMeasurements.length; i++) {
+            const x = scaleX(i);
+            const y = scaleY(values[i]);
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.stroke();
+        
+        // Draw data points
+        for (let i = 0; i < validMeasurements.length; i++) {
+            const x = scaleX(i);
+            const y = scaleY(values[i]);
+            
+            // Draw point
+            ctx.fillStyle = statuses[i] ? '#34c759' : '#ff3b30';
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        
+        // Draw labels
+        ctx.fillStyle = '#666';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < validMeasurements.length; i++) {
+            const x = scaleX(i);
+            const label = labels[i];
+            ctx.fillText(label, x, height - padding + 15);
+        }
+        
+        // Draw Y-axis labels
+        ctx.textAlign = 'right';
+        for (let i = 0; i <= numGridLines; i++) {
+            const val = minVal + (i / numGridLines) * range;
+            const y = padding + ((numGridLines - i) / numGridLines) * chartHeight;
+            ctx.fillText(val.toFixed(1), padding - 5, y + 3);
+        }
+        
+        // Draw legend
+        const legendY = padding - 20;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#007aff';
+        ctx.fillRect(padding, legendY, 15, 3);
+        ctx.fillStyle = '#666';
+        ctx.fillText('Measured', padding + 20, legendY + 3);
+        
+        ctx.fillStyle = '#ffa500';
+        ctx.fillRect(padding + 100, legendY, 15, 3);
+        ctx.fillStyle = '#666';
+        ctx.fillText('Nominal', padding + 120, legendY + 3);
+        
+    }, 100);
+    
+    return html;
+}
+
+// Render overview image from project folder
+function renderOverviewImage(record) {
+    try {
+        // Try to get the project data from localStorage
+        const projectDataStr = localStorage.getItem('measurementProject');
+        if (!projectDataStr) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🌅 No project loaded</div>';
+        }
+        
+        const projectData = JSON.parse(projectDataStr);
+        const projectName = projectData.name || 'Unknown';
+        
+        // Build overview image path (assuming standard structure)
+        const overviewPath = `${projectName}/${record.qrCode || 'unknown'}/overview.png`;
+        
+        return `<div class="element-field" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+            <img src="${overviewPath}" alt="Overview" style="max-width:100%;max-height:100%;object-fit:contain;" 
+                 onerror="this.parentElement.innerHTML='🌅 Overview image not found'">
+        </div>`;
+    } catch (error) {
+        console.error('Error rendering overview image:', error);
+        return '<div class="element-field">🌅 Overview Image Error</div>';
+    }
+}
+
+// Render zoom images from project folder
+function renderZoomImages(record) {
+    try {
+        const projectDataStr = localStorage.getItem('measurementProject');
+        if (!projectDataStr) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔎 No project loaded</div>';
+        }
+        
+        const projectData = JSON.parse(projectDataStr);
+        const projectName = projectData.name || 'Unknown';
+        
+        // Get measurements that might have zoom images
+        const measurements = record.measurements || [];
+        const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+        
+        if (validMeasurements.length === 0) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔎 No measurements</div>';
+        }
+        
+        // Build zoom images grid
+        let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;width:100%;height:100%;overflow:auto;">';
+        
+        validMeasurements.forEach(m => {
+            const zoomPath = `${projectName}/${record.qrCode || 'unknown'}/zooms/${m.MP_ID}.png`;
+            html += `<div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
+                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
+                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;object-fit:contain;" 
+                     onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;color:var(--text-secondary);\\'>No image</div>'">
+            </div>`;
+        });
+        
+        html += '</div>';
+        return html;
+    } catch (error) {
+        console.error('Error rendering zoom images:', error);
+        return '<div class="element-field">🔎 Zoom Images Error</div>';
+    }
+}
+
+// Render auto visualization (overview + zooms)
+function renderAutoVisualization(record) {
+    try {
+        const projectDataStr = localStorage.getItem('measurementProject');
+        if (!projectDataStr) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🤖 No project loaded</div>';
+        }
+        
+        const projectData = JSON.parse(projectDataStr);
+        const projectName = projectData.name || 'Unknown';
+        const overviewPath = `${projectName}/${record.qrCode || 'unknown'}/overview.png`;
+        
+        const measurements = record.measurements || [];
+        const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+        
+        let html = '<div style="display:flex;flex-direction:column;gap:8px;padding:8px;width:100%;height:100%;overflow:auto;">';
+        
+        // Overview section
+        html += `<div style="border:1px solid var(--border-color);padding:8px;">
+            <div style="font-weight:bold;margin-bottom:4px;">Overview</div>
+            <img src="${overviewPath}" alt="Overview" style="width:100%;height:auto;object-fit:contain;" 
+                 onerror="this.innerHTML='🌅 Overview not found'">
+        </div>`;
+        
+        // Zooms section
+        html += '<div style="border:1px solid var(--border-color);padding:8px;">';
+        html += '<div style="font-weight:bold;margin-bottom:4px;">Measurement Zooms</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px;">';
+        
+        validMeasurements.forEach(m => {
+            const zoomPath = `${projectName}/${record.qrCode || 'unknown'}/zooms/${m.MP_ID}.png`;
+            html += `<div style="border:1px solid var(--border-color);padding:2px;text-align:center;">
+                <div style="font-size:9px;font-weight:bold;">${m.MP_ID}</div>
+                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;" 
+                     onerror="this.style.display='none'">
+            </div>`;
+        });
+        
+        html += '</div></div></div>';
+        return html;
+    } catch (error) {
+        console.error('Error rendering auto visualization:', error);
+        return '<div class="element-field">🤖 Auto Visualization Error</div>';
+    }
+}
+
 function getSelectedElement() {
     return reportState.selection.element;
 }
@@ -630,9 +953,34 @@ function makeElementInteractive(element) {
         startDrag(e, element);
     });
     
-    // Double-click to edit text
+    // Double-click to edit text or upload image
     element.addEventListener('dblclick', (e) => {
         e.stopPropagation();
+        
+        // Handle image upload
+        if (element.dataset.type === 'image') {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const imageEl = element.querySelector('.element-image');
+                        if (imageEl) {
+                            imageEl.innerHTML = `<img src="${event.target.result}" style="width: 100%; height: 100%; object-fit: contain;">`;
+                            element.dataset.imageData = event.target.result;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+            return;
+        }
+        
+        // Handle text editing
         const textEl = element.querySelector('.element-text, .element-title');
         if (textEl) {
             textEl.contentEditable = 'true';
@@ -920,6 +1268,33 @@ function updatePropertiesPanel(element) {
         </div>
     `;
     
+    // Page Number section for pageNumber elements
+    if (type === 'pageNumber') {
+        const pageNum = element.dataset.pageNumber || '1';
+        html += `
+            <div class="property-section">
+                <div class="property-section-title">Page Number Settings</div>
+                <div class="property-row full">
+                    <div class="property-field">
+                        <label class="property-label">Page Number</label>
+                        <input type="number" class="property-input" id="prop-page-number" value="${pageNum}" min="1">
+                    </div>
+                </div>
+                <div class="property-row full">
+                    <div class="property-field">
+                        <label class="property-label">Format</label>
+                        <select class="property-select" id="prop-page-format">
+                            <option value="Page {page}">Page {page}</option>
+                            <option value="{page}">{page}</option>
+                            <option value="Page {page} of {total}">Page {page} of {total}</option>
+                            <option value="{page} / {total}">{page} / {total}</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
     // Typography section for text elements
     if (isText) {
         const textEl = element.querySelector('.element-text, .element-title');
@@ -1031,6 +1406,27 @@ function attachPropertyListeners(element) {
     document.getElementById('prop-zindex')?.addEventListener('input', (e) => {
         element.style.zIndex = parseInt(e.target.value) || 1;
     });
+    
+    // Page Number properties
+    if (element.dataset.type === 'pageNumber') {
+        document.getElementById('prop-page-number')?.addEventListener('input', (e) => {
+            element.dataset.pageNumber = parseInt(e.target.value) || 1;
+            const format = element.dataset.pageFormat || 'Page {page}';
+            const fieldEl = element.querySelector('.element-field');
+            if (fieldEl) {
+                fieldEl.textContent = format.replace('{page}', element.dataset.pageNumber).replace('{total}', '1');
+            }
+        });
+        
+        document.getElementById('prop-page-format')?.addEventListener('change', (e) => {
+            element.dataset.pageFormat = e.target.value;
+            const pageNum = element.dataset.pageNumber || '1';
+            const fieldEl = element.querySelector('.element-field');
+            if (fieldEl) {
+                fieldEl.textContent = e.target.value.replace('{page}', pageNum).replace('{total}', '1');
+            }
+        });
+    }
     
     // Typography properties
     const textEl = element.querySelector('.element-text, .element-title');
