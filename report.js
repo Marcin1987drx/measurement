@@ -48,6 +48,136 @@ const reportState = {
     }
 };
 
+// Translation data
+const translations = {
+    en: {
+        backToMain: 'Back to Main',
+        components: 'Components',
+        staticElements: 'Static Elements',
+        textBlock: 'Text Block',
+        title: 'Title',
+        image: 'Image',
+        line: 'Line',
+        rectangle: 'Rectangle',
+        pageNumber: 'Page Number',
+        dynamicFields: 'Dynamic Fields',
+        currentDate: 'Current Date',
+        currentTime: 'Current Time',
+        user: 'User/Inspector',
+        schemaName: 'Schema Name',
+        schemaVersion: 'Schema Version',
+        qrCode: 'QR Code',
+        overallStatus: 'Overall Status',
+        dataComponents: 'Data Components',
+        measurementTable: 'Measurement Table',
+        chart: 'Chart',
+        singleField: 'Single Field',
+        visualization: 'Visualization',
+        overviewImage: 'Overview Image',
+        zoomImages: 'Zoom Images',
+        autoVisualization: 'Auto (Overview + Zooms)',
+        new: 'New',
+        open: 'Open',
+        save: 'Save',
+        preview: 'Preview',
+        generatePDF: 'Generate PDF',
+        zoom: 'Zoom',
+        grid: 'Grid',
+        snap: 'Snap',
+        rulers: 'Rulers',
+        designer: 'Designer',
+        generator: 'Generator',
+        addPage: 'Add Page',
+        properties: 'Properties',
+        selectElement: 'Select an element to edit properties',
+        searchComponents: 'Search components...'
+    },
+    pl: {
+        backToMain: 'Powrót do głównej',
+        components: 'Komponenty',
+        staticElements: 'Elementy statyczne',
+        textBlock: 'Blok tekstu',
+        title: 'Tytuł',
+        image: 'Obraz',
+        line: 'Linia',
+        rectangle: 'Prostokąt',
+        pageNumber: 'Numer strony',
+        dynamicFields: 'Pola dynamiczne',
+        currentDate: 'Bieżąca data',
+        currentTime: 'Bieżący czas',
+        user: 'Użytkownik/Inspektor',
+        schemaName: 'Nazwa schematu',
+        schemaVersion: 'Wersja schematu',
+        qrCode: 'Kod QR',
+        overallStatus: 'Status ogólny',
+        dataComponents: 'Komponenty danych',
+        measurementTable: 'Tabela pomiarów',
+        chart: 'Wykres',
+        singleField: 'Pojedyncze pole',
+        visualization: 'Wizualizacja',
+        overviewImage: 'Obraz poglądowy',
+        zoomImages: 'Obrazy powiększone',
+        autoVisualization: 'Auto (Przegląd + Powiększenia)',
+        new: 'Nowy',
+        open: 'Otwórz',
+        save: 'Zapisz',
+        preview: 'Podgląd',
+        generatePDF: 'Generuj PDF',
+        zoom: 'Powiększenie',
+        grid: 'Siatka',
+        snap: 'Przyciąganie',
+        rulers: 'Linijki',
+        designer: 'Projektant',
+        generator: 'Generator',
+        addPage: 'Dodaj stronę',
+        properties: 'Właściwości',
+        selectElement: 'Wybierz element, aby edytować właściwości',
+        searchComponents: 'Szukaj komponentów...'
+    },
+    de: {
+        backToMain: 'Zurück zur Hauptseite',
+        components: 'Komponenten',
+        staticElements: 'Statische Elemente',
+        textBlock: 'Textblock',
+        title: 'Titel',
+        image: 'Bild',
+        line: 'Linie',
+        rectangle: 'Rechteck',
+        pageNumber: 'Seitenzahl',
+        dynamicFields: 'Dynamische Felder',
+        currentDate: 'Aktuelles Datum',
+        currentTime: 'Aktuelle Zeit',
+        user: 'Benutzer/Inspektor',
+        schemaName: 'Schemaname',
+        schemaVersion: 'Schemaversion',
+        qrCode: 'QR-Code',
+        overallStatus: 'Gesamtstatus',
+        dataComponents: 'Datenkomponenten',
+        measurementTable: 'Messtabelle',
+        chart: 'Diagramm',
+        singleField: 'Einzelfeld',
+        visualization: 'Visualisierung',
+        overviewImage: 'Übersichtsbild',
+        zoomImages: 'Zoom-Bilder',
+        autoVisualization: 'Auto (Übersicht + Zooms)',
+        new: 'Neu',
+        open: 'Öffnen',
+        save: 'Speichern',
+        preview: 'Vorschau',
+        generatePDF: 'PDF generieren',
+        zoom: 'Zoom',
+        grid: 'Raster',
+        snap: 'Einrasten',
+        rulers: 'Lineale',
+        designer: 'Designer',
+        generator: 'Generator',
+        addPage: 'Seite hinzufügen',
+        properties: 'Eigenschaften',
+        selectElement: 'Wählen Sie ein Element zum Bearbeiten der Eigenschaften',
+        searchComponents: 'Komponenten suchen...'
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🎨 Report Studio initializing...');
     
@@ -69,6 +199,11 @@ function toggleTheme() {
     const isDark = document.documentElement.classList.toggle('dark-mode');
     reportState.ui.theme = isDark ? 'dark' : 'light';
     localStorage.setItem('theme', reportState.ui.theme);
+    
+    // Propagate theme change across the app
+    const event = new CustomEvent('themeChanged', { detail: { theme: reportState.ui.theme } });
+    window.dispatchEvent(event);
+    console.log(`🎨 Theme toggled to: ${reportState.ui.theme}`);
 }
 
 function initializeLanguage() {
@@ -82,6 +217,9 @@ function initializeLanguage() {
     const langSelect = document.getElementById('language-toggle');
     if (langSelect) langSelect.value = reportState.ui.language;
     document.body.setAttribute('lang', reportState.ui.language);
+    
+    // Apply translations to all i18n elements
+    changeLanguage(reportState.ui.language);
 }
 
 function changeLanguage(lang) {
@@ -90,9 +228,25 @@ function changeLanguage(lang) {
     localStorage.setItem('language', lang);
     document.body.setAttribute('lang', lang);
     
-    // Update all i18n elements if translations exist
+    // Update all i18n elements with translations
     const i18nElements = document.querySelectorAll('[data-i18n]');
-    console.log(`✅ Updated ${i18nElements.length} UI elements`);
+    i18nElements.forEach(el => {
+        const key = el.dataset.i18n;
+        if (translations[lang] && translations[lang][key]) {
+            el.textContent = translations[lang][key];
+        }
+    });
+    
+    // Update placeholder texts
+    const i18nPlaceholders = document.querySelectorAll('[data-i18n-placeholder]');
+    i18nPlaceholders.forEach(el => {
+        const key = el.dataset.i18nPlaceholder;
+        if (translations[lang] && translations[lang][key]) {
+            el.placeholder = translations[lang][key];
+        }
+    });
+    
+    console.log(`✅ Updated ${i18nElements.length} UI elements with ${lang} translations`);
 }
 
 function loadProjectData() {
@@ -488,7 +642,11 @@ function adjustZoom(delta) {
     const el = document.getElementById('zoom-level');
     if (el) el.textContent = `${reportState.ui.zoom}%`;
     const container = document.getElementById('canvas-container');
-    if (container) container.className = `canvas-container zoom-${reportState.ui.zoom}`;
+    if (container) {
+        container.style.transform = `scale(${reportState.ui.zoom / 100})`;
+        container.style.transformOrigin = 'top left';
+    }
+    console.log(`🔍 Zoom adjusted to ${reportState.ui.zoom}%`);
 }
 
 function addPage() {
@@ -818,63 +976,101 @@ function renderOverviewImage(record) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No record data</div>';
     }
     
-    const id = `img-${Date.now()}`;
-    setTimeout(async () => {
-        try {
-            const fs = window.fileSystemAdapter;
-            const url = await fs.getImageURL(`exports/visualizations/${record.qrCode}.png`);
-            document.getElementById(id).innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
-        } catch (e) {
-            document.getElementById(id).innerHTML = '📷 Not found';
+    try {
+        const projectDataStr = localStorage.getItem('measurementProject');
+        if (!projectDataStr) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No project loaded</div>';
         }
-    }, 50);
-    return `<div id="${id}">⏳ Loading...</div>`;
+        
+        const projectData = JSON.parse(projectDataStr);
+        const projectName = projectData.name || 'Unknown';
+        const overviewPath = `${projectName}/${record.qrCode}/overview.png`;
+        
+        const id = `img-${Date.now()}`;
+        setTimeout(async () => {
+            try {
+                const fs = window.fileSystemAdapter;
+                const url = await fs.getImageURL(overviewPath);
+                const imgEl = document.getElementById(id);
+                if (imgEl) {
+                    imgEl.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Overview">`;
+                }
+            } catch (e) {
+                console.warn('📷 Overview image not found:', overviewPath, e);
+                const imgEl = document.getElementById(id);
+                if (imgEl) {
+                    imgEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">📷 Image not found</div>';
+                }
+            }
+        }, 50);
+        return `<div id="${id}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>`;
+    } catch (error) {
+        console.error('Error rendering overview image:', error);
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 Error loading image</div>';
+    }
 }
 
 // Render zoom images from project folder
 function renderZoomImages(record) {
     if (!record || !record.qrCode) {
-        return '<div class="element-field">🔍 No record</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record</div>';
     }
     
     const measurements = (record.measurements || []).filter(m => m.Value);
     if (measurements.length === 0) {
-        return '<div class="element-field">🔍 No measurements</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements</div>';
     }
     
-    const containerId = `zoom-container-${Date.now()}`;
-    let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
-    
-    measurements.forEach((m, idx) => {
-        const imgId = `zoom-img-${Date.now()}-${idx}`;
-        html += `
-            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
-                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
-                <div id="${imgId}">⏳</div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    
-    setTimeout(async () => {
-        const fs = window.fileSystemAdapter;
-        for (let idx = 0; idx < measurements.length; idx++) {
-            const m = measurements[idx];
-            const imgId = `zoom-img-${Date.now()}-${idx}`;
-            const imgEl = document.getElementById(imgId);
-            if (imgEl) {
-                try {
-                    const url = await fs.getImageURL(`exports/visualizations/${record.qrCode}_${m.MP_ID}.png`);
-                    imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
-                } catch (e) {
-                    imgEl.innerHTML = '<div style="padding:20px;font-size:10px;color:var(--text-secondary);">🔍 Not generated</div>';
+    try {
+        const projectDataStr = localStorage.getItem('measurementProject');
+        if (!projectDataStr) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No project loaded</div>';
+        }
+        
+        const projectData = JSON.parse(projectDataStr);
+        const projectName = projectData.name || 'Unknown';
+        
+        const containerId = `zoom-container-${Date.now()}`;
+        const baseImgId = `zoom-img-${Date.now()}`;
+        
+        let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
+        
+        measurements.forEach((m, idx) => {
+            const imgId = `${baseImgId}-${idx}`;
+            html += `
+                <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
+                    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
+                    <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">⏳</div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        
+        setTimeout(async () => {
+            const fs = window.fileSystemAdapter;
+            for (let idx = 0; idx < measurements.length; idx++) {
+                const m = measurements[idx];
+                const imgId = `${baseImgId}-${idx}`;
+                const imgEl = document.getElementById(imgId);
+                if (imgEl) {
+                    try {
+                        const zoomPath = `${projectName}/${record.qrCode}/zooms/${m.MP_ID}.png`;
+                        const url = await fs.getImageURL(zoomPath);
+                        imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
+                    } catch (e) {
+                        console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
+                        imgEl.innerHTML = '<div style="padding:20px;font-size:10px;color:var(--text-secondary);">🔍 Not available</div>';
+                    }
                 }
             }
-        }
-    }, 50);
-    
-    return html;
+        }, 50);
+        
+        return html;
+    } catch (error) {
+        console.error('Error rendering zoom images:', error);
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 Error loading images</div>';
+    }
 }
 
 // Render auto visualization (overview + zooms)
@@ -887,39 +1083,82 @@ function renderAutoVisualization(record) {
         
         const projectData = JSON.parse(projectDataStr);
         const projectName = projectData.name || 'Unknown';
-        const overviewPath = `${projectName}/${record.qrCode || 'unknown'}/overview.png`;
+        
+        if (!record || !record.qrCode) {
+            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🤖 No record data</div>';
+        }
         
         const measurements = record.measurements || [];
         const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
+        
+        const overviewId = `auto-overview-${Date.now()}`;
+        const zoomsContainerId = `auto-zooms-${Date.now()}`;
         
         let html = '<div style="display:flex;flex-direction:column;gap:8px;padding:8px;width:100%;height:100%;overflow:auto;">';
         
         // Overview section
         html += `<div style="border:1px solid var(--border-color);padding:8px;">
             <div style="font-weight:bold;margin-bottom:4px;">Overview</div>
-            <img src="${overviewPath}" alt="Overview" style="width:100%;height:auto;object-fit:contain;" 
-                 onerror="this.innerHTML='🌅 Overview not found'">
+            <div id="${overviewId}" style="min-height:100px;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>
         </div>`;
         
         // Zooms section
-        html += '<div style="border:1px solid var(--border-color);padding:8px;">';
-        html += '<div style="font-weight:bold;margin-bottom:4px;">Measurement Zooms</div>';
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px;">';
+        html += `<div style="border:1px solid var(--border-color);padding:8px;">
+            <div style="font-weight:bold;margin-bottom:4px;">Measurement Zooms</div>
+            <div id="${zoomsContainerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px;">`;
         
-        validMeasurements.forEach(m => {
-            const zoomPath = `${projectName}/${record.qrCode || 'unknown'}/zooms/${m.MP_ID}.png`;
+        validMeasurements.forEach((m, idx) => {
+            const zoomImgId = `auto-zoom-${Date.now()}-${idx}`;
             html += `<div style="border:1px solid var(--border-color);padding:2px;text-align:center;">
                 <div style="font-size:9px;font-weight:bold;">${m.MP_ID}</div>
-                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;" 
-                     onerror="this.style.display='none'">
+                <div id="${zoomImgId}" style="min-height:60px;display:flex;align-items:center;justify-content:center;">⏳</div>
             </div>`;
         });
         
         html += '</div></div></div>';
+        
+        // Load images asynchronously
+        setTimeout(async () => {
+            const fs = window.fileSystemAdapter;
+            
+            // Load overview
+            try {
+                const overviewPath = `${projectName}/${record.qrCode}/overview.png`;
+                const overviewUrl = await fs.getImageURL(overviewPath);
+                const overviewEl = document.getElementById(overviewId);
+                if (overviewEl) {
+                    overviewEl.innerHTML = `<img src="${overviewUrl}" alt="Overview" style="width:100%;height:auto;object-fit:contain;">`;
+                }
+            } catch (e) {
+                console.warn('🌅 Overview image not found:', e);
+                const overviewEl = document.getElementById(overviewId);
+                if (overviewEl) {
+                    overviewEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">🌅 Not available</div>';
+                }
+            }
+            
+            // Load zoom images
+            for (let idx = 0; idx < validMeasurements.length; idx++) {
+                const m = validMeasurements[idx];
+                const zoomImgId = `auto-zoom-${Date.now()}-${idx}`;
+                const zoomEl = document.getElementById(zoomImgId);
+                if (zoomEl) {
+                    try {
+                        const zoomPath = `${projectName}/${record.qrCode}/zooms/${m.MP_ID}.png`;
+                        const zoomUrl = await fs.getImageURL(zoomPath);
+                        zoomEl.innerHTML = `<img src="${zoomUrl}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
+                    } catch (e) {
+                        console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
+                        zoomEl.innerHTML = '<div style="font-size:9px;color:var(--text-secondary);">N/A</div>';
+                    }
+                }
+            }
+        }, 50);
+        
         return html;
     } catch (error) {
         console.error('Error rendering auto visualization:', error);
-        return '<div class="element-field">🤖 Auto Visualization Error</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🤖 Error loading visualization</div>';
     }
 }
 
@@ -1858,14 +2097,15 @@ function generatePDF() {
     console.log('📄 Starting PDF generation...');
     
     try {
-        // Check if jsPDF is loaded
-        if (typeof window.jspdf === 'undefined') {
-            alert('❌ jsPDF library not loaded. Please refresh the page.');
-            console.error('❌ jsPDF not available');
+        // Check if jsPDF is loaded (try both window.jspdf and window.jsPDF)
+        if (typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined') {
+            console.error('❌ jsPDF not available. Checking if library is loading...');
+            alert('❌ jsPDF library not loaded. Please refresh the page and try again.');
             return;
         }
         
-        const { jsPDF } = window.jspdf;
+        // Support both window.jspdf and window.jsPDF
+        const { jsPDF } = window.jspdf || { jsPDF: window.jsPDF };
         const doc = new jsPDF({
             orientation: reportState.template.meta.orientation || 'portrait',
             unit: 'mm',
