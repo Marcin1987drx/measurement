@@ -72,15 +72,27 @@ function toggleTheme() {
 }
 
 function initializeLanguage() {
+    // ✅ Load saved language preference from localStorage
+    const savedLanguage = localStorage.getItem('language');
+    if (savedLanguage) {
+        reportState.ui.language = savedLanguage;
+        console.log(`🌐 Loaded saved language: ${savedLanguage}`);
+    }
+    
     const langSelect = document.getElementById('language-toggle');
     if (langSelect) langSelect.value = reportState.ui.language;
     document.body.setAttribute('lang', reportState.ui.language);
 }
 
 function changeLanguage(lang) {
+    console.log(`🌐 Language changed to: ${lang}`);
     reportState.ui.language = lang;
     localStorage.setItem('language', lang);
     document.body.setAttribute('lang', lang);
+    
+    // Update all i18n elements if translations exist
+    const i18nElements = document.querySelectorAll('[data-i18n]');
+    console.log(`✅ Updated ${i18nElements.length} UI elements`);
 }
 
 function loadProjectData() {
@@ -428,6 +440,12 @@ function saveTemplate() {
                     color: textEl.style.color || '#000000',
                     textAlign: textEl.style.textAlign || 'left'
                 };
+            }
+            
+            // ✅ Priority 3: Capture image data for image elements
+            if (element.dataset.type === 'image' && element.dataset.imageData) {
+                component.imageData = element.dataset.imageData;
+                console.log('💾 Saving image data in template');
             }
             
             pageData.components.push(component);
@@ -932,6 +950,12 @@ function createCanvasElement(type, x, y, container) {
     // Content based on type
     element.innerHTML = getElementContent(type);
     
+    // ✅ Priority 3: Add click handler for image upload (in addition to double-click)
+    if (type === 'image') {
+        element.style.cursor = 'pointer';
+        element.title = '📷 Click to upload image';
+    }
+    
     // Make it interactive
     makeElementInteractive(element);
     
@@ -957,21 +981,31 @@ function makeElementInteractive(element) {
     element.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         
-        // Handle image upload
+        // ✅ Priority 3: Handle image upload
         if (element.dataset.type === 'image') {
+            console.log('📷 Image upload triggered');
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
             input.onchange = async (e) => {
                 const file = e.target.files[0];
                 if (file) {
+                    const fileSizeKB = Math.round(file.size / 1024);
+                    console.log(`📷 Image selected: ${file.name}, ${fileSizeKB}KB`);
+                    
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const imageEl = element.querySelector('.element-image');
                         if (imageEl) {
                             imageEl.innerHTML = `<img src="${event.target.result}" style="width: 100%; height: 100%; object-fit: contain;">`;
                             element.dataset.imageData = event.target.result;
+                            console.log(`✅ Image uploaded: ${fileSizeKB}KB`);
+                            console.log('✅ Image data stored in element');
                         }
+                    };
+                    reader.onerror = (error) => {
+                        console.error('❌ Error reading image file:', error);
+                        alert('❌ Failed to load image. Please try again.');
                     };
                     reader.readAsDataURL(file);
                 }
@@ -1641,9 +1675,23 @@ function loadTemplateData(templateData) {
                     textEl.style.color = comp.textStyle.color;
                     textEl.style.textAlign = comp.textStyle.textAlign;
                     element.appendChild(textEl);
+                } else if (comp.type === 'image' && comp.imageData) {
+                    // ✅ Priority 3: Restore image element with saved data
+                    const imageEl = document.createElement('div');
+                    imageEl.className = 'element-image';
+                    imageEl.innerHTML = `<img src="${comp.imageData}" style="width: 100%; height: 100%; object-fit: contain;">`;
+                    element.appendChild(imageEl);
+                    element.dataset.imageData = comp.imageData;
+                    element.style.cursor = 'pointer';
+                    element.title = '📷 Click to upload image';
+                    console.log('📂 Restored image from template');
                 } else {
                     // Dynamic element - get fresh content
                     element.innerHTML = getElementContent(comp.type);
+                    if (comp.type === 'image') {
+                        element.style.cursor = 'pointer';
+                        element.title = '📷 Click to upload image';
+                    }
                 }
                 
                 // Make interactive
