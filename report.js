@@ -814,66 +814,50 @@ function renderMeasurementChart(measurements) {
 
 // Render overview image from project folder
 function renderOverviewImage(record) {
-    try {
-        // Try to get the project data from localStorage
-        const projectDataStr = localStorage.getItem('measurementProject');
-        if (!projectDataStr) {
-            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🌅 No project loaded</div>';
-        }
-        
-        const projectData = JSON.parse(projectDataStr);
-        const projectName = projectData.name || 'Unknown';
-        
-        // Build overview image path (assuming standard structure)
-        const overviewPath = `${projectName}/${record.qrCode || 'unknown'}/overview.png`;
-        
-        return `<div class="element-field" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-            <img src="${overviewPath}" alt="Overview" style="max-width:100%;max-height:100%;object-fit:contain;" 
-                 onerror="this.parentElement.innerHTML='🌅 Overview image not found'">
-        </div>`;
-    } catch (error) {
-        console.error('Error rendering overview image:', error);
-        return '<div class="element-field">🌅 Overview Image Error</div>';
+    if (!record || !record.qrCode) {
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No record data</div>';
     }
+    
+    const overviewPath = `exports/visualizations/${record.qrCode}.png`;
+    
+    return `
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            <img src="${overviewPath}" 
+                 alt="Overview ${record.qrCode}" 
+                 style="max-width:100%;max-height:100%;object-fit:contain;" 
+                 onerror="this.parentElement.innerHTML='<div style=\\'padding:16px;text-align:center;color:var(--text-secondary);\\'>📷 Not found: ${record.qrCode}.png</div>'"
+                 onload="console.log('✅ Overview loaded: ${record.qrCode}.png')">
+        </div>
+    `;
 }
 
 // Render zoom images from project folder
 function renderZoomImages(record) {
-    try {
-        const projectDataStr = localStorage.getItem('measurementProject');
-        if (!projectDataStr) {
-            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔎 No project loaded</div>';
-        }
-        
-        const projectData = JSON.parse(projectDataStr);
-        const projectName = projectData.name || 'Unknown';
-        
-        // Get measurements that might have zoom images
-        const measurements = record.measurements || [];
-        const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
-        
-        if (validMeasurements.length === 0) {
-            return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔎 No measurements</div>';
-        }
-        
-        // Build zoom images grid
-        let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;width:100%;height:100%;overflow:auto;">';
-        
-        validMeasurements.forEach(m => {
-            const zoomPath = `${projectName}/${record.qrCode || 'unknown'}/zooms/${m.MP_ID}.png`;
-            html += `<div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
-                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
-                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;object-fit:contain;" 
-                     onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;color:var(--text-secondary);\\'>No image</div>'">
-            </div>`;
-        });
-        
-        html += '</div>';
-        return html;
-    } catch (error) {
-        console.error('Error rendering zoom images:', error);
-        return '<div class="element-field">🔎 Zoom Images Error</div>';
+    if (!record || !record.qrCode) {
+        return '<div class="element-field">🔍 No record</div>';
     }
+    
+    const measurements = (record.measurements || []).filter(m => m.Value);
+    if (measurements.length === 0) {
+        return '<div class="element-field">🔍 No measurements</div>';
+    }
+    
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">';
+    
+    measurements.forEach(m => {
+        const zoomPath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
+        html += `
+            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
+                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
+                <img src="${zoomPath}" alt="${m.MP_ID}" style="width:100%;height:auto;" 
+                     onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;font-size:10px;color:var(--text-secondary);\\'>🔍 Not generated</div>'"
+                     onload="console.log('✅ Zoom loaded: ${m.MP_ID}')">
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    return html;
 }
 
 // Render auto visualization (overview + zooms)
@@ -1385,6 +1369,18 @@ function updatePropertiesPanel(element) {
         `;
     }
     
+    // Image Upload section for image elements
+    if (type === 'image') {
+        html += `
+            <div class="property-section">
+                <div class="property-section-title">Image Upload</div>
+                <button id="btn-properties-upload" class="btn btn-primary" style="width:100%;margin-top:8px;">
+                    📷 Upload Photo
+                </button>
+            </div>
+        `;
+    }
+    
     // Actions section
     html += `
         <div class="property-section">
@@ -1488,6 +1484,37 @@ function attachPropertyListeners(element) {
                 textEl.style.textAlign = btn.dataset.align;
             });
         });
+    }
+    
+    // Image upload button
+    if (element.dataset.type === 'image') {
+        setTimeout(() => {
+            const uploadBtn = document.getElementById('btn-properties-upload');
+            if (uploadBtn) {
+                uploadBtn.addEventListener('click', () => {
+                    // Trigger same file picker as double-click
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const imageEl = element.querySelector('.element-image');
+                            if (imageEl) {
+                                imageEl.innerHTML = `<img src="${event.target.result}" style="width: 100%; height: 100%; object-fit: contain;">`;
+                                element.dataset.imageData = event.target.result;
+                                console.log('✅ Image uploaded via Properties button');
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                    };
+                    input.click();
+                });
+            }
+        }, 50);
     }
     
     // Actions
