@@ -984,7 +984,7 @@ function renderOverviewImage(record) {
         
         const projectData = JSON.parse(projectDataStr);
         const projectName = projectData.name || 'Unknown';
-        const overviewPath = `${projectName}/${record.qrCode}/overview.png`;
+        const overviewPath = `exports/visualizations/${record.qrCode}.png`;
         
         const id = `img-${Date.now()}`;
         setTimeout(async () => {
@@ -1055,7 +1055,7 @@ function renderZoomImages(record) {
                 const imgEl = document.getElementById(imgId);
                 if (imgEl) {
                     try {
-                        const zoomPath = `${projectName}/${record.qrCode}/zooms/${m.MP_ID}.png`;
+                        const zoomPath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
                         const url = await fs.getImageURL(zoomPath);
                         imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
                     } catch (e) {
@@ -1123,7 +1123,7 @@ function renderAutoVisualization(record) {
             
             // Load overview
             try {
-                const overviewPath = `${projectName}/${record.qrCode}/overview.png`;
+                const overviewPath = `exports/visualizations/${record.qrCode}.png`;
                 const overviewUrl = await fs.getImageURL(overviewPath);
                 const overviewEl = document.getElementById(overviewId);
                 if (overviewEl) {
@@ -1144,7 +1144,7 @@ function renderAutoVisualization(record) {
                 const zoomEl = document.getElementById(zoomImgId);
                 if (zoomEl) {
                     try {
-                        const zoomPath = `${projectName}/${record.qrCode}/zooms/${m.MP_ID}.png`;
+                        const zoomPath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
                         const zoomUrl = await fs.getImageURL(zoomPath);
                         zoomEl.innerHTML = `<img src="${zoomUrl}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
                     } catch (e) {
