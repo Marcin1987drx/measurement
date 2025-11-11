@@ -685,7 +685,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="text" class="input-field mp-sub-input" data-col-index="${index}">
                     `;
                     const input = group.querySelector('input');
-                    input.addEventListener('input', () => handleValueChange(input));
+                    input.addEventListener('input', () => {
+                        handleValueChange(input);
+                        
+                        // Real-time validation for table columns
+                        const val = input.value.replace(',', '.');
+                        const num = parseFloat(val);
+                        
+                        if (val !== '' && !isNaN(num)) {
+                            if (num >= col.min && num <= col.max) {
+                                input.classList.remove('status-error');
+                                input.classList.add('status-ok');
+                            } else {
+                                input.classList.remove('status-ok');
+                                input.classList.add('status-error');
+                            }
+                            renderCanvas(); // Update label color on canvas
+                        } else {
+                            input.classList.remove('status-ok', 'status-error');
+                        }
+                    });
                     input.addEventListener('focus', () => {
                         selectMP(mp.id);
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
@@ -710,7 +729,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.querySelector('.mp-name').textContent = `${mp.id}: ${mp.name}`;
                 row.querySelector('.mp-spec').textContent = `[${mp.nominal.toString().replace('.',',')}${mp.unit} | ${mp.min.toString().replace('.',',')}...${mp.max.toString().replace('.',',')}]`;
                 const input = row.querySelector('.mp-value input');
-                input.addEventListener('input', () => handleValueChange(input));
+                input.addEventListener('input', () => {
+                    handleValueChange(input);
+                    
+                    // Real-time validation
+                    const val = input.value.replace(',', '.');
+                    const num = parseFloat(val);
+                    const statusSpan = row.querySelector('.mp-status-text');
+                    
+                    if (val !== '' && !isNaN(num)) {
+                        if (num >= mp.min && num <= mp.max) {
+                            statusSpan.textContent = '✅ OK';
+                            statusSpan.style.color = 'var(--status-ok)';
+                            input.classList.remove('status-error');
+                            input.classList.add('status-ok');
+                        } else {
+                            statusSpan.textContent = '⚠️ NOK';
+                            statusSpan.style.color = 'var(--status-error)';
+                            input.classList.remove('status-ok');
+                            input.classList.add('status-error');
+                        }
+                        renderCanvas(); // Update label color on canvas
+                    } else {
+                        statusSpan.textContent = '';
+                        input.classList.remove('status-ok', 'status-error');
+                    }
+                });
                 input.addEventListener('focus', () => {
                     selectMP(mp.id);
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
@@ -875,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
                 if (anyFilled) statusClass = allOk ? 'status-ok' : 'status-error';
-                labelHtml = `<div>${mp.id} ${anyFilled ? (allOk ? '<span class="label-status status-ok-text">OK</span>' : '<span class="label-status status-error-text">NOK</span>') : ''}</div><div class="point-name">${mp.name}</div>`;
+                labelHtml = `<div>${mp.id} ${anyFilled ? (allOk ? '<span class="label-status status-ok-text">✅ OK</span>' : '<span class="label-status status-error-text">⚠️ NOK</span>') : ''}</div><div class="point-name">${mp.name}</div>`;
                 if (tooltipText) label.dataset.tooltip = tooltipText.trim();
 
             } else {
@@ -885,10 +929,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const numValue = parseFloat(value.replace(',', '.'));
                     if (!isNaN(numValue) && numValue >= mp.min && numValue <= mp.max) {
                         statusClass = 'status-ok';
-                        statusText = `<span class="label-status status-ok-text">OK</span>`;
+                        statusText = `<span class="label-status status-ok-text">✅ OK</span>`;
                     } else {
                         statusClass = 'status-error';
-                        statusText = `<span class="label-status status-error-text">NOK</span>`;
+                        statusText = `<span class="label-status status-error-text">⚠️ NOK</span>`;
                     }
                 }
                 labelHtml = `<div>${mp.id}: ${value}${mp.unit} ${statusText}</div><div class="point-name">${mp.name}</div><div class="tolerance">[${mp.min}..${mp.max}]</div>`;
@@ -1636,13 +1680,31 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else st='';
                         valTxt = `${mp.id}: ${v}${mp.unit}`;
                     }
-                    if(st) {
-                        const lx=(mp.labelX||(mp.arrows?.[0]?.x2||mp.x2))*scale+ox, ly=(mp.labelY||(mp.arrows?.[0]?.y2||mp.y2))*scale+oy;
+                    if(st || valTxt) { // Show label even if no status yet
+                        const lx=(mp.labelX||(mp.arrows?.[0]?.x2||mp.x2))*scale+ox;
+                        const ly=(mp.labelY||(mp.arrows?.[0]?.y2||mp.y2))*scale+oy;
+                        
+                        // Value text with status
                         ctx.font=`600 ${16*scale}px sans-serif`;
-                        const m1=ctx.measureText(`${valTxt} ${st}`);
+                        ctx.textAlign='center';
+                        ctx.textBaseline='middle';
+                        const statusText = st ? ` ${st}` : '';
+                        const valueText = `${valTxt}${statusText}`;
+                        const m1=ctx.measureText(valueText);
+                        
+                        // Name text
                         ctx.font=`400 ${14*scale}px sans-serif`;
                         const m2=ctx.measureText(mp.name);
-                        const w=Math.max(m1.width,m2.width)+24*scale, h=(1.4*16*scale)*3;
+                        
+                        // Tolerance text
+                        const tolText = mp.type === 'table' ? '' : `[${mp.min}..${mp.max}]`;
+                        ctx.font=`400 ${12*scale}px sans-serif`;
+                        const m3=ctx.measureText(tolText);
+                        
+                        const w=Math.max(m1.width,m2.width,m3.width)+24*scale;
+                        const h=(1.4*16*scale)*3.5; // Increased height for 3 lines
+                        
+                        // Draw background box
                         ctx.fillStyle='white';
                         ctx.strokeStyle=sCol;
                         ctx.lineWidth=2*scale;
@@ -1650,14 +1712,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         ctx.roundRect(lx-w/2,ly-h/2,w,h,[8*scale]);
                         ctx.fill();
                         ctx.stroke();
-                        ctx.textAlign='center';
-                        ctx.textBaseline='middle';
+                        
+                        // Draw value + status (line 1)
                         ctx.fillStyle='#0B0F10';
                         ctx.font=`600 ${16*scale}px sans-serif`;
-                        ctx.fillText(`${valTxt} ${st}`,lx,ly-h*0.2);
+                        ctx.fillText(valueText, lx, ly-h*0.25);
+                        
+                        // Draw name (line 2)
                         ctx.font=`400 ${14*scale}px sans-serif`;
                         ctx.fillStyle='#6c757d';
-                        ctx.fillText(mp.name,lx,ly+h*0.2);
+                        ctx.fillText(mp.name, lx, ly+h*0.05);
+                        
+                        // Draw tolerance (line 3)
+                        if (tolText) {
+                            ctx.font=`400 ${12*scale}px sans-serif`;
+                            ctx.fillStyle='#6c757d';
+                            ctx.fillText(tolText, lx, ly+h*0.3);
+                        }
                     }
                 });
                 const qr=(cRec?cRec.QRCode:dom.qrCodeInput.value), dt=(cRec?new Date(cRec.Timestamp):new Date()).toLocaleDateString();
