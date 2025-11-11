@@ -740,7 +740,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleValueChange = (input) => {
         if (input) input.value = input.value.replace('.', ',');
-        renderCanvas();
+        // ✅ FIXED: Don't re-render during typing to prevent arrow/label position shifts
+        // Labels/arrows should only update on blur or save
+        // renderCanvas(); // REMOVED
     };
 
     const handleTablePaste = (e, container) => {
@@ -2663,7 +2665,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // [SECTION] INIT & EVENTS
     // =========================================
     if (!checkFSAPISupport()) return;
-    updateTheme(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    
+    // ✅ Load saved dark mode preference from localStorage
+    const savedDarkMode = localStorage.getItem('darkMode');
+    const isDarkMode = savedDarkMode === 'true' || (savedDarkMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    updateTheme(isDarkMode);
+    console.log(`🎨 Theme initialized: ${isDarkMode ? 'dark' : 'light'} (from localStorage: ${savedDarkMode})`);
     
     // ✅ Priority 2: Fix language toggle - save to localStorage and update UI
     dom.languageToggle.addEventListener('change', (e) => {
@@ -2679,6 +2686,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.themeToggle.addEventListener('click', () => {
         const isDark = document.documentElement.classList.toggle('dark-mode');
         updateTheme(isDark);
+        // ✅ Save dark mode preference to localStorage
+        localStorage.setItem('darkMode', isDark.toString());
+        console.log(`🎨 Theme toggled to: ${isDark ? 'dark' : 'light'}`);
     });
 
     async function selectProjectFolder() {
