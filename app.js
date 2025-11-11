@@ -700,7 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 input.classList.remove('status-ok');
                                 input.classList.add('status-error');
                             }
-                            renderCanvas(); // Update label color on canvas
+                            // ✅ FIXED: Update only label text, not positions
+                            updateSingleLabel(mp.id);
                         } else {
                             input.classList.remove('status-ok', 'status-error');
                         }
@@ -749,7 +750,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             input.classList.remove('status-ok');
                             input.classList.add('status-error');
                         }
-                        renderCanvas(); // Update label color on canvas
+                        // ✅ FIXED: Update only label text, not positions
+                        updateSingleLabel(mp.id);
                     } else {
                         statusSpan.textContent = '';
                         input.classList.remove('status-ok', 'status-error');
@@ -821,6 +823,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] CANVAS RENDERING
     // =========================================
+    
+    // Helper function to escape HTML to prevent XSS
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    
     const syncOverlayDimensions = () => {
         if (!dom.backgroundImg.src || !dom.backgroundImg.complete || dom.backgroundImg.naturalWidth === 0) return;
         const imgRect = dom.backgroundImg.getBoundingClientRect();
@@ -998,6 +1008,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentData.meta?.showQR) positionElement(dom.labelsContainer.querySelector('[data-drag-type="qrLabel"]'), currentData.meta.qrLabelPos || { x: 100, y: 50 });
         if (currentData.meta?.showDate) positionElement(dom.labelsContainer.querySelector('[data-drag-type="dateLabel"]'), currentData.meta.dateLabelPos || { x: 100, y: 80 });
+    };
+
+    /**
+     * Update only the text content and status of a single label without recalculating positions
+     * This prevents arrow/label position shifts during typing
+     */
+    const updateSingleLabel = (mpId) => {
+        const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mpId}"]`);
+        if (!label) return;
+
+        const isEditor = appState.ui.isEditorOpen;
+        const currentData = isEditor ? appState.ui.editorState : appState.data.currentMap;
+        if (!currentData) return;
+
+        const mp = currentData.points?.find(p => p.id === mpId);
+        if (!mp) return;
+
+        let statusClass = '', labelHtml = '', tooltipText = '';
+
+        if (mp.type === 'table') {
+            let allOk = true, anyFilled = false;
+            (mp.columns || []).forEach((col, i) => {
+                const val = document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${i}"]`)?.value;
+                if (val && val.trim() !== '') {
+                    anyFilled = true;
+                    const num = parseFloat(val.replace(',', '.'));
+                    const isOk = !isNaN(num) && num >= col.min && num <= col.max;
+                    if (!isOk) allOk = false;
+                    tooltipText += `${col.name}: ${val}${col.unit} [${isOk ? 'OK' : 'NOK'}]\n`;
+                } else {
+                    tooltipText += `${col.name}: --\n`;
+                }
+            });
+            if (anyFilled) statusClass = allOk ? 'status-ok' : 'status-error';
+            labelHtml = `<div>${escapeHtml(mp.id)} ${anyFilled ? (allOk ? '<span class="label-status status-ok-text">✅ OK</span>' : '<span class="label-status status-error-text">⚠️ NOK</span>') : ''}</div><div class="point-name">${escapeHtml(mp.name)}</div>`;
+            if (tooltipText) label.dataset.tooltip = tooltipText.trim();
+            else delete label.dataset.tooltip;
+        } else {
+            const value = document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value || '';
+            let statusText = '';
+            if (value !== '') {
+                const numValue = parseFloat(value.replace(',', '.'));
+                if (!isNaN(numValue) && numValue >= mp.min && numValue <= mp.max) {
+                    statusClass = 'status-ok';
+                    statusText = `<span class="label-status status-ok-text">✅ OK</span>`;
+                } else {
+                    statusClass = 'status-error';
+                    statusText = `<span class="label-status status-error-text">⚠️ NOK</span>`;
+                }
+            }
+            labelHtml = `<div>${escapeHtml(mp.id)}: ${escapeHtml(value)}${escapeHtml(mp.unit)} ${statusText}</div><div class="point-name">${escapeHtml(mp.name)}</div><div class="tolerance">[${escapeHtml(mp.min.toString())}..${escapeHtml(mp.max.toString())}]</div>`;
+        }
+
+        // Update classes
+        label.classList.remove('status-ok', 'status-error');
+        if (statusClass) label.classList.add(statusClass);
+        
+        // Update content
+        label.innerHTML = labelHtml;
     };
 
     // =========================================

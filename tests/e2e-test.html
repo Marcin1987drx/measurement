@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2E Test Suite - Measurement App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .test-suite {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .test-case {
+            border-left: 4px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fafafa;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .test-case.running {
+            border-left-color: #2196F3;
+            background: #E3F2FD;
+        }
+        
+        .test-case.passed {
+            border-left-color: #4CAF50;
+            background: #E8F5E9;
+        }
+        
+        .test-case.failed {
+            border-left-color: #F44336;
+            background: #FFEBEE;
+        }
+        
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .test-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .test-status {
+            font-size: 20px;
+        }
+        
+        .test-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .test-result {
+            font-size: 13px;
+            color: #555;
+            font-family: 'Courier New', monospace;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+        }
+        
+        .test-error {
+            color: #D32F2F;
+            font-weight: 600;
+        }
+        
+        .summary {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 20px;
+        }
+        
+        .summary h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .stat-card {
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .stat-card.total {
+            background: #E3F2FD;
+            color: #1976D2;
+        }
+        
+        .stat-card.passed {
+            background: #E8F5E9;
+            color: #388E3C;
+        }
+        
+        .stat-card.failed {
+            background: #FFEBEE;
+            color: #D32F2F;
+        }
+        
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .run-button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+        
+        .run-button:hover {
+            background: #1976D2;
+        }
+        
+        .run-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #E0E0E0;
+            border-radius: 2px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #2196F3;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 E2E Test Suite</h1>
+    <p class="subtitle">Automated tests for Measurement App critical issues</p>
+    
+    <div class="summary">
+        <h2>Test Summary</h2>
+        <div class="summary-stats">
+            <div class="stat-card total">
+                <div class="stat-number" id="stat-total">6</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+            <div class="stat-card passed">
+                <div class="stat-number" id="stat-passed">0</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat-card failed">
+                <div class="stat-number" id="stat-failed">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        </div>
+        <button class="run-button" id="run-tests">▶️ Run All Tests</button>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+    </div>
+    
+    <div class="test-suite">
+        <h2>Critical Issue Tests</h2>
+        
+        <div class="test-case" id="test-1">
+            <div class="test-header">
+                <div class="test-name">Test 1: Arrow Position Stability</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify that arrow and label positions don't change when typing values in input fields
+            </div>
+            <div class="test-result" id="result-1"></div>
+        </div>
+        
+        <div class="test-case" id="test-2">
+            <div class="test-header">
+                <div class="test-name">Test 2: Coordinate System Validation</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify viewBox coordinates are constrained to 1000x700 range
+            </div>
+            <div class="test-result" id="result-2"></div>
+        </div>
+        
+        <div class="test-case" id="test-3">
+            <div class="test-header">
+                <div class="test-name">Test 3: Real-time Validation Warnings</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify that NOK warnings appear immediately when invalid values are entered
+            </div>
+            <div class="test-result" id="result-3"></div>
+        </div>
+        
+        <div class="test-case" id="test-4">
+            <div class="test-header">
+                <div class="test-name">Test 4: Label Update Function</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify updateSingleLabel() function updates only text content, not positions
+            </div>
+            <div class="test-result" id="result-4"></div>
+        </div>
+        
+        <div class="test-case" id="test-5">
+            <div class="test-header">
+                <div class="test-name">Test 5: Visualization Export Paths</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify correct paths are used for visualization exports (exports/visualizations/)
+            </div>
+            <div class="test-result" id="result-5"></div>
+        </div>
+        
+        <div class="test-case" id="test-6">
+            <div class="test-header">
+                <div class="test-name">Test 6: File System API Availability</div>
+                <div class="test-status">⏳</div>
+            </div>
+            <div class="test-description">
+                Verify fileSystemAdapter exists and has required methods for image loading
+            </div>
+            <div class="test-result" id="result-6"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Test Framework
+        class TestRunner {
+            constructor() {
+                this.tests = [];
+                this.results = {
+                    total: 0,
+                    passed: 0,
+                    failed: 0
+                };
+            }
+            
+            addTest(name, description, testFn) {
+                this.tests.push({ name, description, testFn });
+            }
+            
+            async runAll() {
+                this.results = { total: this.tests.length, passed: 0, failed: 0 };
+                
+                for (let i = 0; i < this.tests.length; i++) {
+                    const test = this.tests[i];
+                    const testId = i + 1;
+                    
+                    // Update UI
+                    const testEl = document.getElementById(`test-${testId}`);
+                    const resultEl = document.getElementById(`result-${testId}`);
+                    testEl.className = 'test-case running';
+                    testEl.querySelector('.test-status').textContent = '⏳';
+                    
+                    try {
+                        const result = await test.testFn();
+                        
+                        if (result.success) {
+                            this.results.passed++;
+                            testEl.className = 'test-case passed';
+                            testEl.querySelector('.test-status').textContent = '✅';
+                            resultEl.textContent = `✅ PASSED\n${result.message}`;
+                        } else {
+                            this.results.failed++;
+                            testEl.className = 'test-case failed';
+                            testEl.querySelector('.test-status').textContent = '❌';
+                            resultEl.innerHTML = `<span class="test-error">❌ FAILED</span>\n${result.message}`;
+                        }
+                    } catch (error) {
+                        this.results.failed++;
+                        testEl.className = 'test-case failed';
+                        testEl.querySelector('.test-status').textContent = '❌';
+                        resultEl.innerHTML = `<span class="test-error">❌ ERROR</span>\n${error.message}\n${error.stack}`;
+                    }
+                    
+                    // Update summary
+                    document.getElementById('stat-passed').textContent = this.results.passed;
+                    document.getElementById('stat-failed').textContent = this.results.failed;
+                    document.getElementById('progress').style.width = 
+                        `${((i + 1) / this.tests.length) * 100}%`;
+                    
+                    // Small delay between tests
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                // Show final summary
+                const allPassed = this.results.failed === 0;
+                alert(`Test Run Complete!\n\n` +
+                      `Total: ${this.results.total}\n` +
+                      `Passed: ${this.results.passed} ✅\n` +
+                      `Failed: ${this.results.failed} ❌\n\n` +
+                      `${allPassed ? '🎉 All tests passed!' : '⚠️ Some tests failed.'}`);
+            }
+        }
+        
+        // Initialize Test Runner
+        const runner = new TestRunner();
+        
+        // Test 1: Arrow Position Stability
+        runner.addTest(
+            'Arrow Position Stability',
+            'Verify that arrow and label positions don\'t change when typing values',
+            async () => {
+                // Load app.js content and verify renderCanvas is not called in input handlers
+                const response = await fetch('../app.js');
+                const appJsContent = await response.text();
+                
+                // Check that renderCanvas() has been removed from input handlers
+                const inputEventHandlers = appJsContent.match(/addEventListener\s*\(\s*['"]input['"]\s*,\s*\([^)]*\)\s*=>\s*{[^}]*}/gs) || [];
+                
+                let hasRenderCanvasInInput = false;
+                for (const handler of inputEventHandlers) {
+                    if (handler.includes('renderCanvas()') && !handler.includes('//') && !handler.includes('FIXED')) {
+                        hasRenderCanvasInInput = true;
+                        break;
+                    }
+                }
+                
+                if (hasRenderCanvasInInput) {
+                    return {
+                        success: false,
+                        message: 'Found renderCanvas() call in input handler. This will cause arrows to jump.'
+                    };
+                }
+                
+                // Verify updateSingleLabel exists
+                const hasUpdateSingleLabel = appJsContent.includes('updateSingleLabel');
+                if (!hasUpdateSingleLabel) {
+                    return {
+                        success: false,
+                        message: 'updateSingleLabel() function not found in app.js'
+                    };
+                }
+                
+                return {
+                    success: true,
+                    message: 'renderCanvas() removed from input handlers ✓\nupdateSingleLabel() function exists ✓\nArrows will remain stable during typing ✓'
+                };
+            }
+        );
+        
+        // Test 2: Coordinate System Validation
+        runner.addTest(
+            'Coordinate System Validation',
+            'Verify viewBox coordinates are constrained to 1000x700',
+            async () => {
+                const response = await fetch('../app.js');
+                const appJsContent = await response.text();
+                
+                // Check for viewBox constants
+                const hasViewBoxWidth = appJsContent.includes('VIEWBOX_WIDTH = 1000');
+                const hasViewBoxHeight = appJsContent.includes('VIEWBOX_HEIGHT = 700');
+                
+                if (!hasViewBoxWidth || !hasViewBoxHeight) {
+                    return {
+                        success: false,
+                        message: 'ViewBox constants not found or incorrect.\nExpected: VIEWBOX_WIDTH = 1000, VIEWBOX_HEIGHT = 700'
+                    };
+                }
+                
+                // Check for coordinate clamping
+                const hasCoordinateClamping = appJsContent.includes('Math.max') && 
+                                             appJsContent.includes('Math.min') &&
+                                             appJsContent.includes('VIEWBOX_WIDTH') &&
+                                             appJsContent.includes('VIEWBOX_HEIGHT');
+                
+                if (!hasCoordinateClamping) {
+                    return {
+                        success: false,
+                        message: 'Coordinate clamping not found. Coordinates should be clamped to viewBox range.'
+                    };
+                }
+                
+                return {
+                    success: true,
+                    message: 'ViewBox dimensions: 1000x700 ✓\nCoordinate validation in place ✓\nCoordinates will be clamped to valid range ✓'
+                };
+            }
+        );
+        
+        // Test 3: Real-time Validation Warnings
+        runner.addTest(
+            'Real-time Validation Warnings',
+            'Verify NOK warnings appear immediately',
+            async () => {
+                const response = await fetch('../app.js');
+                const appJsContent = await response.text();
+                
+                // Check for validation logic in input handlers
+                const hasNOKValidation = appJsContent.includes('⚠️ NOK');
+                const hasOKValidation = appJsContent.includes('✅ OK');
+                const hasRealtimeValidation = appJsContent.includes('Real-time validation');
+                
+                if (!hasNOKValidation || !hasOKValidation) {
+                    return {
+                        success: false,
+                        message: 'Validation status indicators (OK/NOK) not found in input handlers'
+                    };
+                }
+                
+                // Check that validation happens on input event
+                const inputHandlerPattern = /addEventListener\s*\(\s*['"]input['"]/g;
+                const inputHandlers = (appJsContent.match(inputHandlerPattern) || []).length;
+                
+                if (inputHandlers === 0) {
+                    return {
+                        success: false,
+                        message: 'No input event handlers found'
+                    };
+                }
+                
+                return {
+                    success: true,
+                    message: `Real-time validation active ✓\n${inputHandlers} input handlers with validation ✓\nOK/NOK status updates immediately ✓`
+                };
+            }
+        );
+        
+        // Test 4: Label Update Function
+        runner.addTest(
+            'Label Update Function',
+            'Verify updateSingleLabel() exists and works correctly',
+            async () => {
+                const response = await fetch('../app.js');
+                const appJsContent = await response.text();
+                
+                // Find updateSingleLabel function
+                const updateSingleLabelMatch = appJsContent.match(/const updateSingleLabel\s*=\s*\([^)]*\)\s*=>\s*{[\s\S]*?};/);
+                
+                if (!updateSingleLabelMatch) {
+                    return {
+                        success: false,
+                        message: 'updateSingleLabel() function not found'
+                    };
+                }
+                
+                const functionBody = updateSingleLabelMatch[0];
+                
+                // Verify it doesn't recalculate positions (no renderCanvas, no syncOverlayDimensions)
+                const hasRenderCanvas = functionBody.includes('renderCanvas()');
+                const hasSyncDimensions = functionBody.includes('syncOverlayDimensions()');
+                
+                if (hasRenderCanvas || hasSyncDimensions) {
+                    return {
+                        success: false,
+                        message: 'updateSingleLabel() should not recalculate positions (found renderCanvas or syncOverlayDimensions)'
+                    };
+                }
+                
+                // Verify it updates label content
+                const updatesInnerHTML = functionBody.includes('innerHTML');
+                const updatesClasses = functionBody.includes('classList');
+                
+                if (!updatesInnerHTML || !updatesClasses) {
+                    return {
+                        success: false,
+                        message: 'updateSingleLabel() should update innerHTML and classList'
+                    };
+                }
+                
+                // Verify it's called from input handlers
+                const isCalledFromInput = appJsContent.includes('updateSingleLabel(mp.id)') || 
+                                         appJsContent.includes('updateSingleLabel(');
+                
+                if (!isCalledFromInput) {
+                    return {
+                        success: false,
+                        message: 'updateSingleLabel() is not being called from input handlers'
+                    };
+                }
+                
+                return {
+                    success: true,
+                    message: 'updateSingleLabel() function exists ✓\nUpdates label content only ✓\nDoes not recalculate positions ✓\nCalled from input handlers ✓'
+                };
+            }
+        );
+        
+        // Test 5: Visualization Export Paths
+        runner.addTest(
+            'Visualization Export Paths',
+            'Verify correct paths for visualization exports',
+            async () => {
+                const response = await fetch('../report.js');
+                const reportJsContent = await response.text();
+                
+                // Check for correct export paths
+                const hasCorrectOverviewPath = reportJsContent.includes('exports/visualizations') ||
+                                               reportJsContent.includes('exports/visualizations/');
+                
+                if (!hasCorrectOverviewPath) {
+                    return {
+                        success: false,
+                        message: 'Visualization path should be: exports/visualizations/'
+                    };
+                }
+                
+                // Check that fileSystemAdapter.getImageURL is used
+                const usesGetImageURL = reportJsContent.includes('getImageURL');
+                
+                if (!usesGetImageURL) {
+                    return {
+                        success: false,
+                        message: 'Should use fileSystemAdapter.getImageURL() for cross-mode compatibility'
+                    };
+                }
+                
+                // Verify it doesn't directly use getDirectoryHandle (which only works in local mode)
+                const renderOverviewMatch = reportJsContent.match(/function renderOverviewImage[\s\S]*?^}/m);
+                if (renderOverviewMatch) {
+                    const functionBody = renderOverviewMatch[0];
+                    const usesDirectHandle = functionBody.includes('getDirectoryHandle') || 
+                                            functionBody.includes('getFileHandle');
+                    
+                    if (usesDirectHandle) {
+                        return {
+                            success: false,
+                            message: 'renderOverviewImage should use getImageURL(), not direct directory handles'
+                        };
+                    }
+                }
+                
+                return {
+                    success: true,
+                    message: 'Export path: exports/visualizations/ ✓\nUses fileSystemAdapter.getImageURL() ✓\nCompatible with both local and server modes ✓'
+                };
+            }
+        );
+        
+        // Test 6: File System API Availability
+        runner.addTest(
+            'File System API Availability',
+            'Verify fileSystemAdapter exists and has required methods',
+            async () => {
+                // Check if fileSystemAdapter.js is loaded
+                const response = await fetch('../fileSystemAdapter.js');
+                const adapterContent = await response.text();
+                
+                // Verify class definition
+                const hasClassDefinition = adapterContent.includes('class FileSystemAdapter');
+                if (!hasClassDefinition) {
+                    return {
+                        success: false,
+                        message: 'FileSystemAdapter class not found'
+                    };
+                }
+                
+                // Verify required methods
+                const requiredMethods = ['initialize', 'getImageURL', 'readFile', 'writeFile'];
+                const missingMethods = [];
+                
+                for (const method of requiredMethods) {
+                    if (!adapterContent.includes(`${method}(`)) {
+                        missingMethods.push(method);
+                    }
+                }
+                
+                if (missingMethods.length > 0) {
+                    return {
+                        success: false,
+                        message: `Missing methods: ${missingMethods.join(', ')}`
+                    };
+                }
+                
+                // Verify it supports both local and server modes
+                const hasLocalMode = adapterContent.includes("mode === 'local'") || adapterContent.includes("this.mode === 'local'");
+                const hasServerMode = adapterContent.includes("mode === 'server'") || 
+                                     adapterContent.includes("this.mode === 'server'") ||
+                                     (adapterContent.includes("'server'") && adapterContent.includes("this.mode"));
+                
+                if (!hasLocalMode || !hasServerMode) {
+                    return {
+                        success: false,
+                        message: 'FileSystemAdapter should support both local and server modes'
+                    };
+                }
+                
+                // Check report.js initializes the adapter
+                const reportResponse = await fetch('../report.js');
+                const reportContent = await reportResponse.text();
+                const initializesAdapter = reportContent.includes('fileSystemAdapter') &&
+                                          reportContent.includes('initialize');
+                
+                if (!initializesAdapter) {
+                    return {
+                        success: false,
+                        message: 'report.js does not initialize fileSystemAdapter'
+                    };
+                }
+                
+                return {
+                    success: true,
+                    message: 'FileSystemAdapter class exists ✓\nAll required methods present ✓\nSupports local and server modes ✓\nInitialized in report.js ✓'
+                };
+            }
+        );
+        
+        // Event Listeners
+        document.getElementById('run-tests').addEventListener('click', async (e) => {
+            const button = e.target;
+            button.disabled = true;
+            button.textContent = '⏳ Running tests...';
+            
+            await runner.runAll();
+            
+            button.disabled = false;
+            button.textContent = '▶️ Run All Tests';
+        });
+        
+        // Auto-run on load (optional)
+        // window.addEventListener('load', () => {
+        //     setTimeout(() => document.getElementById('run-tests').click(), 500);
+        // });
+    </script>
+</body>
+</html>

@@ -999,15 +999,12 @@ function renderOverviewImage(record) {
         try {
             const fs = window.fileSystemAdapter;
             if (!fs || !fs.projectRoot) {
-                throw new Error('File System not initialized');
+                throw new Error('File System not initialized. Please open a project folder in the main app first.');
             }
             
-            // Navigate: projectRoot → exports → visualizations → {qrCode}.png
-            const exportsDir = await fs.projectRoot.getDirectoryHandle('exports');
-            const vizDir = await exportsDir.getDirectoryHandle('visualizations');
-            const imageFile = await vizDir.getFileHandle(`${record.qrCode}.png`);
-            const file = await imageFile.getFile();
-            const url = URL.createObjectURL(file);
+            // Use fileSystemAdapter's getImageURL for both local and server modes
+            const imagePath = `exports/visualizations/${record.qrCode}.png`;
+            const url = await fs.getImageURL(imagePath);
             
             const imgEl = document.getElementById(id);
             if (imgEl) {
@@ -1064,22 +1061,18 @@ function renderZoomImages(record) {
         try {
             const fs = window.fileSystemAdapter;
             if (!fs || !fs.projectRoot) {
-                throw new Error('File System not initialized');
+                throw new Error('File System not initialized. Please open a project folder in the main app first.');
             }
             
-            // Navigate: projectRoot → exports → visualizations
-            const exportsDir = await fs.projectRoot.getDirectoryHandle('exports');
-            const vizDir = await exportsDir.getDirectoryHandle('visualizations');
-            
+            // Use fileSystemAdapter's getImageURL for both local and server modes
             for (let idx = 0; idx < measurements.length; idx++) {
                 const m = measurements[idx];
                 const imgId = `${baseImgId}-${idx}`;
                 const imgEl = document.getElementById(imgId);
                 if (imgEl) {
                     try {
-                        const imageFile = await vizDir.getFileHandle(`${record.qrCode}_${m.MP_ID}.png`);
-                        const file = await imageFile.getFile();
-                        const url = URL.createObjectURL(file);
+                        const imagePath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
+                        const url = await fs.getImageURL(imagePath);
                         imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
                         console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
                     } catch (e) {
