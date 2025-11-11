@@ -11,7 +11,7 @@ const reportState = {
         currentRecordIndex: 0  // Track current record
     },
     ui: {
-        theme: localStorage.getItem('theme') || 'light',
+        theme: (localStorage.getItem('darkMode') === 'true') ? 'dark' : 'light',
         language: localStorage.getItem('language') || 'en',
         zoom: 100,
         gridEnabled: true,
@@ -198,7 +198,8 @@ function initializeTheme() {
 function toggleTheme() {
     const isDark = document.documentElement.classList.toggle('dark-mode');
     reportState.ui.theme = isDark ? 'dark' : 'light';
-    localStorage.setItem('theme', reportState.ui.theme);
+    // ✅ Save to localStorage using 'darkMode' key for consistency with app.js
+    localStorage.setItem('darkMode', isDark.toString());
     
     // Propagate theme change across the app
     const event = new CustomEvent('themeChanged', { detail: { theme: reportState.ui.theme } });
