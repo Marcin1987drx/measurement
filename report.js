@@ -1214,18 +1214,51 @@ function renderZoomImages(record) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements available</div>';
     }
     
-    const containerId = `zoom-container-${Date.now()}`;
-    const baseImgId = `zoom-img-${Date.now()}`;
+    const timestamp = Date.now();
+    const containerId = `zoom-container-${timestamp}`;
+    const baseImgId = `zoom-img-${timestamp}`;
     
-    let html = `<div id="${containerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:8px;overflow:auto;height:100%;">`;
+    let html = `<div id="${containerId}" style="display:flex;flex-direction:column;gap:16px;padding:8px;overflow:auto;height:100%;">`;
     
     measurements.forEach((m, idx) => {
         const imgId = `${baseImgId}-${idx}`;
+        const wrapperClass = `zoom-item-wrapper-${timestamp}-${idx}`;
+        
+        // Determine status icon and color
+        const isOK = m.Status === 'OK' || (m.Value >= m.Min && m.Value <= m.Max);
+        const statusIcon = isOK ? '✅' : '❌';
+        const statusText = isOK ? 'OK' : 'NOK';
+        const statusColor = isOK ? '#34c759' : '#ff3b30';
+        
         html += `
-            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;background:var(--bg-secondary);border-radius:4px;">
-                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:var(--text-primary);">${m.MP_ID}</div>
-                <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">
+            <div class="zoom-item-wrapper ${wrapperClass}" data-mp-id="${m.MP_ID}" data-zoom-index="${idx}">
+                <!-- Controls Bar -->
+                <div class="zoom-controls">
+                    <label style="font-weight:600;color:var(--text-primary);">${m.MP_ID}</label>
+                    <input type="range" 
+                           class="zoom-size-slider" 
+                           min="10" 
+                           max="100" 
+                           value="50" 
+                           data-zoom-index="${idx}"
+                           data-timestamp="${timestamp}">
+                    <span class="zoom-size-label">50%</span>
+                    <button class="zoom-remove-btn" data-zoom-index="${idx}" data-wrapper-class="${wrapperClass}">✖</button>
+                </div>
+                
+                <!-- Zoom Image -->
+                <div class="zoom-image-container" id="${imgId}" style="width: 50%;">
                     <div style="font-size:1.5em;">⏳</div>
+                </div>
+                
+                <!-- Extended Mini Table -->
+                <div class="zoom-mini-table">
+                    <div class="table-row"><strong>MP ID:</strong> <span>${m.MP_ID}</span></div>
+                    <div class="table-row"><strong>Name:</strong> <span>${m.Name || m.MP_ID}</span></div>
+                    <div class="table-row"><strong>Value:</strong> <span>${m.Value} ${m.Unit || ''}</span></div>
+                    <div class="table-row"><strong>Nominal:</strong> <span>${m.Nominal} ${m.Unit || ''}</span></div>
+                    <div class="table-row"><strong>Tolerance:</strong> <span>[${m.Min} - ${m.Max}]</span></div>
+                    <div class="table-row"><strong>Status:</strong> <span style="color:${statusColor};font-weight:bold;">${statusIcon} ${statusText}</span></div>
                 </div>
             </div>
         `;
@@ -1233,7 +1266,7 @@ function renderZoomImages(record) {
     
     html += '</div>';
     
-    // Schedule async image load
+    // Schedule async image load and event listeners
     setTimeout(async () => {
         const fs = window.fileSystemAdapter;
         
@@ -1299,6 +1332,36 @@ function renderZoomImages(record) {
         }
         
         console.log(`✅ Finished loading ${measurements.length} zoom images`);
+        
+        // Attach event listeners for sliders and remove buttons
+        document.querySelectorAll(`.zoom-size-slider[data-timestamp="${timestamp}"]`).forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const idx = e.target.dataset.zoomIndex;
+                const ts = e.target.dataset.timestamp;
+                const size = e.target.value;
+                const container = document.getElementById(`${baseImgId}-${idx}`);
+                const label = e.target.parentElement.querySelector('.zoom-size-label');
+                
+                if (container) {
+                    container.style.width = `${size}%`;
+                }
+                if (label) {
+                    label.textContent = `${size}%`;
+                }
+            });
+        });
+        
+        document.querySelectorAll('.zoom-remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const wrapperClass = e.target.dataset.wrapperClass;
+                const wrapper = document.querySelector(`.${wrapperClass}`);
+                if (wrapper && confirm('Remove this zoom image?')) {
+                    wrapper.style.opacity = '0';
+                    wrapper.style.transition = 'opacity 0.3s';
+                    setTimeout(() => wrapper.remove(), 300);
+                }
+            });
+        });
     }, 100);
     
     return html;
@@ -1322,24 +1385,29 @@ function renderAutoVisualization(record) {
         const measurements = record.measurements || [];
         const validMeasurements = measurements.filter(m => m.Value !== null && m.Value !== undefined && m.Value !== '');
         
-        const overviewId = `auto-overview-${Date.now()}`;
-        const zoomsContainerId = `auto-zooms-${Date.now()}`;
+        // Generate unique IDs once (fixing the timestamp bug)
+        const timestamp = Date.now();
+        const overviewId = `auto-overview-${timestamp}`;
+        const zoomsContainerId = `auto-zooms-${timestamp}`;
         
-        let html = '<div style="display:flex;flex-direction:column;gap:8px;padding:8px;width:100%;height:100%;overflow:auto;">';
+        let html = '<div class="auto-viz-container">';
         
         // Overview section
-        html += `<div style="border:1px solid var(--border-color);padding:8px;">
-            <div style="font-weight:bold;margin-bottom:4px;">Overview</div>
+        html += `<div class="overview-section">
+            <h4>Overview</h4>
             <div id="${overviewId}" style="min-height:100px;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>
         </div>`;
         
         // Zooms section
-        html += `<div style="border:1px solid var(--border-color);padding:8px;">
-            <div style="font-weight:bold;margin-bottom:4px;">Measurement Zooms</div>
-            <div id="${zoomsContainerId}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px;">`;
+        html += `<div class="zooms-section">
+            <h4>Measurement Zooms</h4>
+            <div id="${zoomsContainerId}" class="zoom-grid">`;
+        
+        // Pre-generate all zoom IDs with the same timestamp
+        const zoomIds = validMeasurements.map((m, idx) => `auto-zoom-${timestamp}-${idx}`);
         
         validMeasurements.forEach((m, idx) => {
-            const zoomImgId = `auto-zoom-${Date.now()}-${idx}`;
+            const zoomImgId = zoomIds[idx];
             html += `<div style="border:1px solid var(--border-color);padding:2px;text-align:center;">
                 <div style="font-size:9px;font-weight:bold;">${m.MP_ID}</div>
                 <div id="${zoomImgId}" style="min-height:60px;display:flex;align-items:center;justify-content:center;">⏳</div>
@@ -1351,6 +1419,15 @@ function renderAutoVisualization(record) {
         // Load images asynchronously
         setTimeout(async () => {
             const fs = window.fileSystemAdapter;
+            
+            if (!fs || !fs.projectRoot) {
+                console.warn('⚠️ File system not available or project folder not connected');
+                const overviewEl = document.getElementById(overviewId);
+                if (overviewEl) {
+                    overviewEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">📁 Project folder not connected</div>';
+                }
+                return;
+            }
             
             // Load overview
             try {
@@ -1368,10 +1445,10 @@ function renderAutoVisualization(record) {
                 }
             }
             
-            // Load zoom images
+            // Load zoom images using pre-generated IDs
             for (let idx = 0; idx < validMeasurements.length; idx++) {
                 const m = validMeasurements[idx];
-                const zoomImgId = `auto-zoom-${Date.now()}-${idx}`;
+                const zoomImgId = zoomIds[idx];
                 const zoomEl = document.getElementById(zoomImgId);
                 if (zoomEl) {
                     try {

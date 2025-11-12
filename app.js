@@ -2832,26 +2832,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function selectProjectFolder() {
-        const fs = window.fileSystemAdapter;
-        await fs.initialize();
-        appState.fileSystem = fs;
-        appState.projectRootHandle = fs.projectRoot;
-        dom.projectFolderName.textContent = fs.projectRoot.name || fs.projectRoot;
-        dom.btnProjectFolder.classList.remove('needs-action');
-        console.log(`✅ Mode: ${fs.mode}`);
-        await scanProjectFolder();
-        
-        // Save directory handle to IndexedDB for persistence
-        if (fs.mode === 'local') {
-            try {
-                await saveHandleToIndexedDB(appState.projectRootHandle);
-            } catch (err) {
-                console.error('❌ Error saving handle to IndexedDB:', err);
+        try {
+            // DIRECT picker call (no auto-restore) - force user to choose folder
+            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            
+            // Save to adapter
+            const fs = window.fileSystemAdapter;
+            fs.projectRoot = handle;
+            fs.mode = 'local';
+            localStorage.setItem('fsMode', 'local');
+            
+            appState.fileSystem = fs;
+            appState.projectRootHandle = handle;
+            
+            // Update UI
+            dom.projectFolderName.textContent = handle.name;
+            dom.btnProjectFolder.classList.remove('needs-action');
+            console.log('✅ New folder selected:', handle.name);
+            
+            // Save to IndexedDB for future auto-restore
+            await fs.saveHandleToIndexedDB(handle);
+            
+            // Load project data
+            await scanProjectFolder();
+            
+            // Save project data to localStorage for Report Studio
+            saveProjectToLocalStorage();
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('❌ Folder selection failed:', error);
+                throw error;
             }
+            // User cancelled - not an error, just log it
+            console.log('ℹ️ Folder selection cancelled by user');
         }
-        
-        // Save project data to localStorage for Report Studio
-        saveProjectToLocalStorage();
     }
 
     dom.btnProjectFolder.addEventListener('click', async () => {
