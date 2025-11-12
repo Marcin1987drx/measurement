@@ -880,12 +880,51 @@ function getElementContent(type) {
             : '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
         vizOverview: currentRecord ? renderOverviewImage(currentRecord) : '<div class="element-field">🌅 Overview Image</div>',
-        vizPointViews: currentRecord ? renderPointViewImages(currentRecord) : '<div class="element-field">🔎 Point Views</div>',
+        vizPointViews: currentRecord ? renderPointViewImages(currentRecord, {}) : '<div class="element-field">🔎 Point Views</div>',
         vizAuto: currentRecord ? renderAutoVisualization(currentRecord) : '<div class="element-field">🤖 Auto Visualization</div>',
         pageNumber: '<div class="element-field">Page {page}</div>'
     };
     // Only return content if type is in the allowed templates (prevents XSS)
     return templates[type] || '<div class="element-field">Unknown Element</div>';
+}
+
+// Helper function to get project backgrounds from localStorage or fileSystem
+function getProjectBackgrounds() {
+    // Try to get from localStorage first (for connected projects)
+    const projectName = reportState.project.name;
+    if (projectName && projectName !== 'No Project Selected') {
+        const storageKey = `measurementProject_${projectName}`;
+        const projectData = localStorage.getItem(storageKey);
+        if (projectData) {
+            try {
+                const data = JSON.parse(projectData);
+                // Check for backgrounds in maps metadata
+                if (data.maps && Array.isArray(data.maps)) {
+                    // Get backgrounds from the first map that has them
+                    for (const map of data.maps) {
+                        if (map.meta && map.meta.backgrounds && Array.isArray(map.meta.backgrounds)) {
+                            return map.meta.backgrounds;
+                        }
+                    }
+                }
+                // Legacy: check if there's a backgrounds array at project level
+                if (data.backgrounds && Array.isArray(data.backgrounds)) {
+                    return data.backgrounds;
+                }
+            } catch (e) {
+                console.error('Error parsing project data from localStorage:', e);
+            }
+        }
+    }
+    
+    // If fileSystem adapter is available and connected, try to read from it
+    if (window.fileSystemAdapter && window.fileSystemAdapter.projectRoot) {
+        // For now, we'll return empty array and let the async loading happen
+        // This could be enhanced to read from file system in the future
+        console.log('File system connected, backgrounds would be loaded from maps');
+    }
+    
+    return [];
 }
 
 // Auto-Adaptive Render measurement table
@@ -1193,14 +1232,27 @@ function renderOverviewImage(record) {
 }
 
 // Render point view images from project folder (saved views for each measurement point)
-function renderPointViewImages(record) {
+function renderPointViewImages(record, config = {}) {
     if (!record || !record.qrCode) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record selected</div>';
     }
     
-    const measurements = (record.measurements || []).filter(m => m.Value);
+    let measurements = (record.measurements || []).filter(m => m.Value);
+    
+    // Apply status filters
+    if (config.showOkOnly) {
+        measurements = measurements.filter(m => m.Status === 'OK' || (m.Value >= m.Min && m.Value <= m.Max));
+    } else if (config.showNokOnly) {
+        measurements = measurements.filter(m => m.Status !== 'OK' && !(m.Value >= m.Min && m.Value <= m.Max));
+    }
+    
+    // Apply background filter if specified
+    if (config.backgroundId) {
+        measurements = measurements.filter(m => m.backgroundId === config.backgroundId || !m.backgroundId);
+    }
+    
     if (measurements.length === 0) {
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements available</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements match the filters</div>';
     }
     
     const timestamp = Date.now();
@@ -1934,6 +1986,44 @@ function updatePropertiesPanel(element) {
         `;
     }
     
+    // Point Views settings for vizPointViews component
+    if (type === 'vizPointViews') {
+        const backgrounds = getProjectBackgrounds();
+        const currentBgId = element.dataset.backgroundId || '';
+        
+        html += `
+            <div class="property-section">
+                <div class="property-section-title">Point Views Settings</div>
+                <div class="property-row full">
+                    <div class="property-field">
+                        <label class="property-label">Filter by Background</label>
+                        <select class="property-select" id="prop-background-filter">
+                            <option value="">All/Default</option>
+                            ${backgrounds.map(bg => 
+                                `<option value="${bg.id}" ${currentBgId === bg.id ? 'selected' : ''}>${bg.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="property-row full">
+                    <div class="property-field">
+                        <label class="property-label">Display Options</label>
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                            <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;">
+                                <input type="checkbox" id="prop-show-ok-only" ${element.dataset.showOkOnly === 'true' ? 'checked' : ''}>
+                                <span>Show OK points only</span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;">
+                                <input type="checkbox" id="prop-show-nok-only" ${element.dataset.showNokOnly === 'true' ? 'checked' : ''}>
+                                <span>Show NOK points only</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
     // Actions section
     html += `
         <div class="property-section">
@@ -2068,6 +2158,54 @@ function attachPropertyListeners(element) {
                 });
             }
         }, 50);
+    }
+    
+    // Point Views properties
+    if (element.dataset.type === 'vizPointViews') {
+        document.getElementById('prop-background-filter')?.addEventListener('change', (e) => {
+            element.dataset.backgroundId = e.target.value;
+            // Re-render the component with new filter
+            const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+                ? reportState.project.records[reportState.project.currentRecordIndex] 
+                : null;
+            if (currentRecord) {
+                element.innerHTML = renderPointViewImages(currentRecord, {
+                    backgroundId: e.target.value || null,
+                    showOkOnly: element.dataset.showOkOnly === 'true',
+                    showNokOnly: element.dataset.showNokOnly === 'true'
+                });
+            }
+        });
+        
+        document.getElementById('prop-show-ok-only')?.addEventListener('change', (e) => {
+            element.dataset.showOkOnly = e.target.checked;
+            // Re-render with new filter
+            const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+                ? reportState.project.records[reportState.project.currentRecordIndex] 
+                : null;
+            if (currentRecord) {
+                element.innerHTML = renderPointViewImages(currentRecord, {
+                    backgroundId: element.dataset.backgroundId || null,
+                    showOkOnly: e.target.checked,
+                    showNokOnly: element.dataset.showNokOnly === 'true'
+                });
+            }
+        });
+        
+        document.getElementById('prop-show-nok-only')?.addEventListener('change', (e) => {
+            element.dataset.showNokOnly = e.target.checked;
+            // Re-render with new filter
+            const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+                ? reportState.project.records[reportState.project.currentRecordIndex] 
+                : null;
+            if (currentRecord) {
+                element.innerHTML = renderPointViewImages(currentRecord, {
+                    backgroundId: element.dataset.backgroundId || null,
+                    showOkOnly: element.dataset.showOkOnly === 'true',
+                    showNokOnly: e.target.checked
+                });
+            }
+        });
     }
     
     // Actions
