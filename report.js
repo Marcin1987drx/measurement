@@ -81,6 +81,7 @@ const translations = {
         save: 'Save',
         preview: 'Preview',
         generatePDF: 'Generate PDF',
+        connectFolder: 'Connect Folder',
         zoom: 'Zoom',
         grid: 'Grid',
         snap: 'Snap',
@@ -123,6 +124,7 @@ const translations = {
         save: 'Zapisz',
         preview: 'Podgląd',
         generatePDF: 'Generuj PDF',
+        connectFolder: 'Połącz Folder',
         zoom: 'Powiększenie',
         grid: 'Siatka',
         snap: 'Przyciąganie',
@@ -165,6 +167,7 @@ const translations = {
         save: 'Speichern',
         preview: 'Vorschau',
         generatePDF: 'PDF generieren',
+        connectFolder: 'Ordner Verbinden',
         zoom: 'Zoom',
         grid: 'Raster',
         snap: 'Einrasten',
@@ -260,18 +263,31 @@ async function loadProjectData() {
             reportState.project.maps = projectData.maps || [];
             reportState.project.records = projectData.records || [];
             
-            // Initialize File System Access API
+            // Initialize File System Access API - try to restore without user gesture first
             const fs = window.fileSystemAdapter;
             if (fs) {
                 try {
-                    await fs.initialize(); // This will restore saved handle or prompt user
-                    reportState.project.rootHandle = fs.projectRoot;
-                    console.log('✅ File System initialized for images');
+                    // Try to restore from IndexedDB first (no user gesture needed if permission still valid)
+                    const restoredHandle = await fs.tryRestoreFromIndexedDB();
+                    
+                    if (restoredHandle) {
+                        fs.mode = 'local';
+                        fs.projectRoot = restoredHandle;
+                        reportState.project.rootHandle = restoredHandle;
+                        console.log('✅ File System auto-restored for Report Studio:', restoredHandle.name);
+                        hideFolderNotConnectedBanner();
+                    } else {
+                        // No saved handle or permission expired
+                        console.log('⚠️ File System not available - user needs to connect folder');
+                        showFolderNotConnectedBanner();
+                    }
                 } catch (initError) {
                     console.warn('⚠️ File System Access not initialized:', initError);
+                    showFolderNotConnectedBanner();
                 }
             } else {
                 console.warn('⚠️ fileSystemAdapter not available');
+                showFolderNotConnectedBanner();
             }
             
             updateProjectDisplay();
@@ -284,6 +300,132 @@ async function loadProjectData() {
     } catch (error) {
         console.error('❌ Error loading project data:', error);
         reportState.project.records = [];
+    }
+}
+
+/**
+ * Show a banner informing user they need to connect the project folder
+ */
+function showFolderNotConnectedBanner() {
+    // Show the "Connect Folder" button in toolbar
+    const connectBtn = document.getElementById('btn-connect-folder');
+    if (connectBtn) {
+        connectBtn.style.display = 'flex';
+    }
+    
+    // Create or show banner
+    let banner = document.getElementById('folder-connection-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'folder-connection-banner';
+        banner.className = 'folder-connection-banner';
+        banner.innerHTML = `
+            <div class="banner-icon">📁</div>
+            <div class="banner-content">
+                <div class="banner-title">Project Folder Not Connected</div>
+                <div class="banner-message">To view visualization images, please connect the project folder.</div>
+            </div>
+            <button id="banner-connect-folder-btn" class="btn btn-primary">
+                📁 Connect Folder
+            </button>
+        `;
+        
+        // Insert banner at top of canvas panel (after toolbar)
+        const canvasPanel = document.querySelector('.canvas-panel');
+        const toolbar = document.querySelector('.canvas-toolbar');
+        if (canvasPanel && toolbar) {
+            toolbar.insertAdjacentElement('afterend', banner);
+        }
+        
+        // Add click handler for banner button
+        const bannerBtn = document.getElementById('banner-connect-folder-btn');
+        if (bannerBtn) {
+            bannerBtn.addEventListener('click', handleConnectFolder);
+        }
+    } else {
+        banner.style.display = 'flex';
+    }
+}
+
+/**
+ * Hide the folder connection banner
+ */
+function hideFolderNotConnectedBanner() {
+    const banner = document.getElementById('folder-connection-banner');
+    if (banner) {
+        banner.style.display = 'none';
+    }
+    
+    const connectBtn = document.getElementById('btn-connect-folder');
+    if (connectBtn) {
+        connectBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Handle "Connect Folder" button click - renew permission with user gesture
+ */
+async function handleConnectFolder() {
+    try {
+        console.log('📁 Connecting project folder...');
+        
+        const fs = window.fileSystemAdapter;
+        if (!fs) {
+            console.error('❌ fileSystemAdapter not available');
+            alert('❌ File System Adapter not available. Please refresh the page.');
+            return;
+        }
+        
+        // Try to renew permission for saved handle
+        const handle = await fs.renewPermission();
+        
+        if (handle) {
+            fs.mode = 'local';
+            fs.projectRoot = handle;
+            reportState.project.rootHandle = handle;
+            
+            console.log('✅ Project folder connected:', handle.name);
+            hideFolderNotConnectedBanner();
+            
+            // Test loading an image to verify it works
+            await testImageLoad();
+            
+            alert('✅ Project folder connected successfully!\nVisualization images will now load.');
+            
+            // Refresh all dynamic elements to reload images
+            refreshAllDynamicElements();
+        } else {
+            console.log('❌ Failed to connect folder - user denied or no saved handle');
+            alert('❌ Failed to connect folder.\n\nPlease:\n1. Go back to the main app (index.html)\n2. Select your project folder again\n3. Return to Report Studio');
+        }
+    } catch (error) {
+        console.error('❌ Error connecting folder:', error);
+        alert('❌ Error connecting folder: ' + error.message);
+    }
+}
+
+/**
+ * Test loading an image to verify file system access works
+ */
+async function testImageLoad() {
+    try {
+        const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+            ? reportState.project.records[reportState.project.currentRecordIndex] 
+            : null;
+        
+        if (!currentRecord || !currentRecord.qrCode) {
+            console.log('ℹ️ No record available to test image loading');
+            return;
+        }
+        
+        const fs = window.fileSystemAdapter;
+        const testPath = `exports/visualizations/${currentRecord.qrCode}.png`;
+        
+        console.log('🧪 Testing image load:', testPath);
+        const url = await fs.getImageURL(testPath);
+        console.log('✅ Test image loaded successfully');
+    } catch (error) {
+        console.warn('⚠️ Test image load failed (this is normal if image does not exist):', error.message);
     }
 }
 
@@ -481,6 +623,9 @@ function setupEventListeners() {
         console.log('📄 Generate PDF clicked');
         generatePDF();
     });
+    
+    // Connect Folder button (shown when folder access is not available)
+    document.getElementById('btn-connect-folder')?.addEventListener('click', handleConnectFolder);
     
     document.getElementById('btn-zoom-in')?.addEventListener('click', () => adjustZoom(25));
     document.getElementById('btn-zoom-out')?.addEventListener('click', () => adjustZoom(-25));
