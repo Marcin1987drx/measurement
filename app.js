@@ -1653,7 +1653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
    
-    const saveProjectToLocalStorage = () => {
+    const saveProjectToLocalStorage = async () => {
         if (!appState.projectRootHandle) {
             console.warn('⚠️ No project handle, skipping localStorage save');
             return;
@@ -1814,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // ✅ Priority 1: Update localStorage after CSV save
             console.log('📊 Updating localStorage with new measurement...');
             await scanProjectFolder(); // Re-scan to refresh appState.data.db from CSV
-            saveProjectToLocalStorage(); // Update localStorage with latest data
+            await saveProjectToLocalStorage(); // Update localStorage with latest data
             console.log('✅ localStorage updated - new measurement visible in Report Studio');
             
             await exportPNG({ fromSave: true, saveToFile: true, showAlertOnSuccess: false });
@@ -3033,7 +3033,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await scanProjectFolder();
             
             // Save project data to localStorage for Report Studio
-            saveProjectToLocalStorage();
+            await saveProjectToLocalStorage();
         } catch (error) {
             if (error.name !== 'AbortError') {
                 console.error('❌ Folder selection failed:', error);
