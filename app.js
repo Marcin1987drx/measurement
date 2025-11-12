@@ -1663,9 +1663,27 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('📊 Saving project to localStorage...');
             console.log('📊 Records in appState.data.db:', appState.data.db.length);
             
+            // Collect maps with their backgrounds
+            const maps = [];
+            for (const [fileName, handle] of Object.entries(appState.fileHandles.maps)) {
+                try {
+                    const content = await readFile(handle);
+                    const mapData = JSON.parse(content);
+                    // Only include meta (with backgrounds) and name for Report Studio
+                    maps.push({
+                        fileName: fileName,
+                        name: fileName.replace('.map.json', ''),
+                        meta: mapData.meta || {}
+                    });
+                } catch (err) {
+                    console.warn(`Could not read map ${fileName}:`, err);
+                }
+            }
+            
             const projectData = {
                 name: appState.projectRootHandle.name,
                 lastAccess: Date.now(),
+                maps: maps,
                 records: appState.data.db.map(record => {
                     const measurements = [];
                     
@@ -1680,6 +1698,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const nominal = record[`${mpId}_Nominal`];
                             const unit = record[`${mpId}_Unit`];
                             const name = record[`${mpId}_Name`];
+                            const backgroundId = record[`${mpId}_BackgroundId`] || null;
                             
                             // Parse numbers (comma as decimal)
                             const valueNum = parseFloat((value || '').toString().replace(',', '.'));
@@ -1699,7 +1718,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 Min: min || '',
                                 Max: max || '',
                                 Nominal: nominal || '',
-                                Status: status
+                                Status: status,
+                                backgroundId: backgroundId
                             });
                         }
                     });
@@ -1753,7 +1773,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             [`${mp.id}_${col.name}_Min`]: col.min,
                             [`${mp.id}_${col.name}_Max`]: col.max,
                             [`${mp.id}_${col.name}_Unit`]: col.unit,
-                            [`${mp.id}_${col.name}_Name`]: col.name
+                            [`${mp.id}_${col.name}_Name`]: col.name,
+                            [`${mp.id}_${col.name}_BackgroundId`]: mp.backgroundId || null
                         });
                     });
                 } else {
@@ -1768,7 +1789,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         [`${mp.id}_Min`]: mp.min,
                         [`${mp.id}_Max`]: mp.max,
                         [`${mp.id}_Unit`]: mp.unit,
-                        [`${mp.id}_Name`]: mp.name
+                        [`${mp.id}_Name`]: mp.name,
+                        [`${mp.id}_BackgroundId`]: mp.backgroundId || null
                     });
                 }
             });
