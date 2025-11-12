@@ -15,9 +15,7 @@ const reportState = {
         language: localStorage.getItem('language') || 'en',
         zoom: 100,
         gridEnabled: true,
-        snapEnabled: true,
-        rulersEnabled: false,
-        mode: 'designer'
+        snapEnabled: true
     },
     template: {
         meta: { name: 'Untitled Report', paper: 'A4', orientation: 'portrait' },
@@ -74,8 +72,8 @@ const translations = {
         singleField: 'Single Field',
         visualization: 'Visualization',
         overviewImage: 'Overview Image',
-        zoomImages: 'Zoom Images',
-        autoVisualization: 'Auto (Overview + Zooms)',
+        pointViewImages: 'Point Views',
+        autoVisualization: 'Auto (Overview + Points)',
         new: 'New',
         open: 'Open',
         save: 'Save',
@@ -85,9 +83,6 @@ const translations = {
         zoom: 'Zoom',
         grid: 'Grid',
         snap: 'Snap',
-        rulers: 'Rulers',
-        designer: 'Designer',
-        generator: 'Generator',
         addPage: 'Add Page',
         properties: 'Properties',
         selectElement: 'Select an element to edit properties',
@@ -117,8 +112,8 @@ const translations = {
         singleField: 'Pojedyncze pole',
         visualization: 'Wizualizacja',
         overviewImage: 'Obraz poglądowy',
-        zoomImages: 'Obrazy powiększone',
-        autoVisualization: 'Auto (Przegląd + Powiększenia)',
+        pointViewImages: 'Widoki punktów',
+        autoVisualization: 'Auto (Przegląd + Punkty)',
         new: 'Nowy',
         open: 'Otwórz',
         save: 'Zapisz',
@@ -128,9 +123,6 @@ const translations = {
         zoom: 'Powiększenie',
         grid: 'Siatka',
         snap: 'Przyciąganie',
-        rulers: 'Linijki',
-        designer: 'Projektant',
-        generator: 'Generator',
         addPage: 'Dodaj stronę',
         properties: 'Właściwości',
         selectElement: 'Wybierz element, aby edytować właściwości',
@@ -160,8 +152,8 @@ const translations = {
         singleField: 'Einzelfeld',
         visualization: 'Visualisierung',
         overviewImage: 'Übersichtsbild',
-        zoomImages: 'Zoom-Bilder',
-        autoVisualization: 'Auto (Übersicht + Zooms)',
+        pointViewImages: 'Punktansichten',
+        autoVisualization: 'Auto (Übersicht + Punkte)',
         new: 'Neu',
         open: 'Öffnen',
         save: 'Speichern',
@@ -171,9 +163,6 @@ const translations = {
         zoom: 'Zoom',
         grid: 'Raster',
         snap: 'Einrasten',
-        rulers: 'Lineale',
-        designer: 'Designer',
-        generator: 'Generator',
         addPage: 'Seite hinzufügen',
         properties: 'Eigenschaften',
         selectElement: 'Wählen Sie ein Element zum Bearbeiten der Eigenschaften',
@@ -891,7 +880,7 @@ function getElementContent(type) {
             : '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
         vizOverview: currentRecord ? renderOverviewImage(currentRecord) : '<div class="element-field">🌅 Overview Image</div>',
-        vizZooms: currentRecord ? renderZoomImages(currentRecord) : '<div class="element-field">🔎 Zoom Images</div>',
+        vizPointViews: currentRecord ? renderPointViewImages(currentRecord) : '<div class="element-field">🔎 Point Views</div>',
         vizAuto: currentRecord ? renderAutoVisualization(currentRecord) : '<div class="element-field">🤖 Auto Visualization</div>',
         pageNumber: '<div class="element-field">Page {page}</div>'
     };
@@ -1203,8 +1192,8 @@ function renderOverviewImage(record) {
     </div>`;
 }
 
-// Render zoom images from project folder
-function renderZoomImages(record) {
+// Render point view images from project folder (saved views for each measurement point)
+function renderPointViewImages(record) {
     if (!record || !record.qrCode) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record selected</div>';
     }
@@ -1305,11 +1294,11 @@ function renderZoomImages(record) {
             
             try {
                 const imagePath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
-                console.log(`🔍 Loading zoom image: ${imagePath}`);
+                console.log(`🔍 Loading point view image: ${imagePath}`);
                 
                 const url = await fs.getImageURL(imagePath);
-                imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;border-radius:2px;" onload="console.log('✅ Zoom image rendered: ${m.MP_ID}')">`;
-                console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
+                imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;border-radius:2px;" onload="console.log('✅ Point view image rendered: ${m.MP_ID}')">`;
+                console.log(`✅ Loaded point view: ${record.qrCode}_${m.MP_ID}.png`);
                 
             } catch (error) {
                 let errorIcon = '❌';
@@ -1326,12 +1315,12 @@ function renderZoomImages(record) {
                     errorMsg = 'Error';
                 }
                 
-                console.warn(`⚠️ Zoom image not available for ${m.MP_ID}:`, error.message);
+                console.warn(`⚠️ Point view image not available for ${m.MP_ID}:`, error.message);
                 imgEl.innerHTML = `<div style="padding:10px;font-size:9px;color:var(--text-secondary);line-height:1.3;">${errorIcon} ${errorMsg}</div>`;
             }
         }
         
-        console.log(`✅ Finished loading ${measurements.length} zoom images`);
+        console.log(`✅ Finished loading ${measurements.length} point view images`);
         
         // Attach event listeners for sliders and remove buttons
         document.querySelectorAll(`.zoom-size-slider[data-timestamp="${timestamp}"]`).forEach(slider => {
@@ -1367,7 +1356,7 @@ function renderZoomImages(record) {
     return html;
 }
 
-// Render auto visualization (overview + zooms)
+// Render auto visualization (overview + point views)
 function renderAutoVisualization(record) {
     try {
         const projectDataStr = localStorage.getItem('measurementProject');
@@ -1398,9 +1387,9 @@ function renderAutoVisualization(record) {
             <div id="${overviewId}" style="min-height:100px;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>
         </div>`;
         
-        // Zooms section
+        // Point Views section
         html += `<div class="zooms-section">
-            <h4>Measurement Zooms</h4>
+            <h4>Measurement Point Views</h4>
             <div id="${zoomsContainerId}" class="zoom-grid">`;
         
         // Pre-generate all zoom IDs with the same timestamp
@@ -1456,7 +1445,7 @@ function renderAutoVisualization(record) {
                         const zoomUrl = await fs.getImageURL(zoomPath);
                         zoomEl.innerHTML = `<img src="${zoomUrl}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
                     } catch (e) {
-                        console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
+                        console.warn(`🔍 Point view image not found for ${m.MP_ID}:`, e);
                         zoomEl.innerHTML = '<div style="font-size:9px;color:var(--text-secondary);">N/A</div>';
                     }
                 }
@@ -2417,11 +2406,17 @@ function generatePDF() {
         const doc = new jsPDF({
             orientation: reportState.template.meta.orientation || 'portrait',
             unit: 'mm',
-            format: 'a4'
+            format: 'a4',
+            compress: true
         });
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
+        
+        // Force light mode for PDF export (white background, black text)
+        doc.setFillColor(255, 255, 255); // White background
+        doc.rect(0, 0, pageWidth, pageHeight, 'F'); // Fill entire page
+        doc.setTextColor(0, 0, 0); // Black text
         
         // Get all pages
         const pages = document.querySelectorAll('.canvas-page');
@@ -2448,8 +2443,8 @@ function generatePDF() {
                 const width = parseInt(element.style.width) || 200;
                 const height = parseInt(element.style.height) || 50;
                 
-                // Convert pixel coordinates to mm (rough conversion: 1px ≈ 0.26mm)
-                const pxToMm = 0.26;
+                // Convert pixel coordinates to mm (accurate conversion: 1px = 0.2645833mm @ 96 DPI)
+                const pxToMm = 0.2645833;
                 const xMm = x * pxToMm;
                 const yMm = y * pxToMm;
                 const widthMm = width * pxToMm;
