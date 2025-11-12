@@ -1134,54 +1134,84 @@ function renderMeasurementChart(measurements) {
 // Render overview image from project folder
 function renderOverviewImage(record) {
     if (!record || !record.qrCode) {
-        return '<div class="element-field" style="padding:16px;text-align:center;">📷 No record</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">📷 No record selected</div>';
     }
     
     const id = `img-overview-${Date.now()}`;
     
     // Schedule async image load
     setTimeout(async () => {
+        const imgEl = document.getElementById(id);
+        if (!imgEl) return;
+        
         try {
             const fs = window.fileSystemAdapter;
-            if (!fs || !fs.projectRoot) {
-                throw new Error('File System not initialized. Please open a project folder in the main app first.');
+            
+            // Check if file system is initialized
+            if (!fs) {
+                throw new Error('ADAPTER_NOT_AVAILABLE');
+            }
+            
+            if (!fs.projectRoot) {
+                throw new Error('FOLDER_NOT_CONNECTED');
             }
             
             // Use fileSystemAdapter's getImageURL for both local and server modes
             const imagePath = `exports/visualizations/${record.qrCode}.png`;
+            console.log(`🔍 Loading overview image: ${imagePath}`);
+            
             const url = await fs.getImageURL(imagePath);
             
-            const imgEl = document.getElementById(id);
-            if (imgEl) {
-                imgEl.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Overview">`;
-                console.log(`✅ Loaded overview: ${record.qrCode}.png`);
-            }
+            imgEl.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Overview" onload="console.log('✅ Overview image rendered')">`;
+            console.log(`✅ Loaded overview: ${record.qrCode}.png`);
+            
         } catch (error) {
-            console.error('❌ Failed to load overview image:', error);
-            const imgEl = document.getElementById(id);
-            if (imgEl) {
-                imgEl.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text-secondary);">
-                    📷 Image not found<br>
-                    <small>${error.message}</small>
-                </div>`;
+            console.error(`❌ Failed to load overview image for ${record.qrCode}:`, error);
+            
+            let errorMessage = '';
+            let errorIcon = '❌';
+            
+            if (error.message === 'ADAPTER_NOT_AVAILABLE') {
+                errorIcon = '⚠️';
+                errorMessage = 'File System Adapter not available<br><small>Please refresh the page</small>';
+            } else if (error.message === 'FOLDER_NOT_CONNECTED') {
+                errorIcon = '📁';
+                errorMessage = 'Project folder not connected<br><small>Click "Connect Folder" button above</small>';
+            } else if (error.name === 'NotFoundError' || error.message.includes('not found')) {
+                errorIcon = '🔍';
+                errorMessage = `Image not found<br><small>File: ${record.qrCode}.png</small>`;
+            } else if (error.name === 'NotAllowedError') {
+                errorIcon = '🔒';
+                errorMessage = 'Permission denied<br><small>Click "Connect Folder" to renew access</small>';
+            } else {
+                errorIcon = '❌';
+                errorMessage = `Error loading image<br><small>${error.message}</small>`;
             }
+            
+            imgEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                <div style="font-size:2em;margin-bottom:8px;">${errorIcon}</div>
+                <div style="font-size:0.9em;">${errorMessage}</div>
+            </div>`;
         }
     }, 100);
     
-    return `<div id="${id}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-        ⏳ Loading image...
+    return `<div id="${id}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-secondary);border-radius:4px;">
+        <div style="text-align:center;">
+            <div style="font-size:2em;margin-bottom:8px;">⏳</div>
+            <div style="font-size:0.9em;color:var(--text-secondary);">Loading image...</div>
+        </div>
     </div>`;
 }
 
 // Render zoom images from project folder
 function renderZoomImages(record) {
     if (!record || !record.qrCode) {
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record selected</div>';
     }
     
     const measurements = (record.measurements || []).filter(m => m.Value);
     if (measurements.length === 0) {
-        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements</div>';
+        return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements available</div>';
     }
     
     const containerId = `zoom-container-${Date.now()}`;
@@ -1192,9 +1222,11 @@ function renderZoomImages(record) {
     measurements.forEach((m, idx) => {
         const imgId = `${baseImgId}-${idx}`;
         html += `
-            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;">
-                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">${m.MP_ID}</div>
-                <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">⏳</div>
+            <div style="border:1px solid var(--border-color);padding:4px;text-align:center;background:var(--bg-secondary);border-radius:4px;">
+                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:var(--text-primary);">${m.MP_ID}</div>
+                <div id="${imgId}" style="min-height:80px;display:flex;align-items:center;justify-content:center;">
+                    <div style="font-size:1.5em;">⏳</div>
+                </div>
             </div>
         `;
     });
@@ -1203,32 +1235,70 @@ function renderZoomImages(record) {
     
     // Schedule async image load
     setTimeout(async () => {
-        try {
-            const fs = window.fileSystemAdapter;
-            if (!fs || !fs.projectRoot) {
-                throw new Error('File System not initialized. Please open a project folder in the main app first.');
-            }
-            
-            // Use fileSystemAdapter's getImageURL for both local and server modes
-            for (let idx = 0; idx < measurements.length; idx++) {
-                const m = measurements[idx];
+        const fs = window.fileSystemAdapter;
+        
+        // Check if file system is available
+        if (!fs) {
+            console.error('❌ File System Adapter not available');
+            measurements.forEach((m, idx) => {
                 const imgId = `${baseImgId}-${idx}`;
                 const imgEl = document.getElementById(imgId);
                 if (imgEl) {
-                    try {
-                        const imagePath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
-                        const url = await fs.getImageURL(imagePath);
-                        imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
-                        console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
-                    } catch (e) {
-                        console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
-                        imgEl.innerHTML = '<div style="padding:20px;font-size:10px;color:var(--text-secondary);">🔍 Not available</div>';
-                    }
+                    imgEl.innerHTML = '<div style="padding:10px;font-size:10px;color:var(--text-secondary);">⚠️ Adapter not available</div>';
                 }
-            }
-        } catch (error) {
-            console.error('❌ Failed to load zoom images:', error);
+            });
+            return;
         }
+        
+        if (!fs.projectRoot) {
+            console.warn('⚠️ Project folder not connected');
+            measurements.forEach((m, idx) => {
+                const imgId = `${baseImgId}-${idx}`;
+                const imgEl = document.getElementById(imgId);
+                if (imgEl) {
+                    imgEl.innerHTML = '<div style="padding:10px;font-size:9px;color:var(--text-secondary);line-height:1.3;">📁 Folder not connected</div>';
+                }
+            });
+            return;
+        }
+        
+        // Load images one by one
+        for (let idx = 0; idx < measurements.length; idx++) {
+            const m = measurements[idx];
+            const imgId = `${baseImgId}-${idx}`;
+            const imgEl = document.getElementById(imgId);
+            
+            if (!imgEl) continue;
+            
+            try {
+                const imagePath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
+                console.log(`🔍 Loading zoom image: ${imagePath}`);
+                
+                const url = await fs.getImageURL(imagePath);
+                imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;border-radius:2px;" onload="console.log('✅ Zoom image rendered: ${m.MP_ID}')">`;
+                console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
+                
+            } catch (error) {
+                let errorIcon = '❌';
+                let errorMsg = 'Error';
+                
+                if (error.name === 'NotFoundError' || error.message.includes('not found')) {
+                    errorIcon = '🔍';
+                    errorMsg = 'Not found';
+                } else if (error.name === 'NotAllowedError') {
+                    errorIcon = '🔒';
+                    errorMsg = 'No access';
+                } else {
+                    errorIcon = '❌';
+                    errorMsg = 'Error';
+                }
+                
+                console.warn(`⚠️ Zoom image not available for ${m.MP_ID}:`, error.message);
+                imgEl.innerHTML = `<div style="padding:10px;font-size:9px;color:var(--text-secondary);line-height:1.3;">${errorIcon} ${errorMsg}</div>`;
+            }
+        }
+        
+        console.log(`✅ Finished loading ${measurements.length} zoom images`);
     }, 100);
     
     return html;
