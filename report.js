@@ -15,9 +15,7 @@ const reportState = {
         language: localStorage.getItem('language') || 'en',
         zoom: 100,
         gridEnabled: true,
-        snapEnabled: true,
-        rulersEnabled: false,
-        mode: 'designer'
+        snapEnabled: true
     },
     template: {
         meta: { name: 'Untitled Report', paper: 'A4', orientation: 'portrait' },
@@ -1194,7 +1192,7 @@ function renderOverviewImage(record) {
     </div>`;
 }
 
-// Render zoom images from project folder
+// Render point view images from project folder (saved views for each measurement point)
 function renderPointViewImages(record) {
     if (!record || !record.qrCode) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record selected</div>';
@@ -1296,11 +1294,11 @@ function renderPointViewImages(record) {
             
             try {
                 const imagePath = `exports/visualizations/${record.qrCode}_${m.MP_ID}.png`;
-                console.log(`🔍 Loading zoom image: ${imagePath}`);
+                console.log(`🔍 Loading point view image: ${imagePath}`);
                 
                 const url = await fs.getImageURL(imagePath);
-                imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;border-radius:2px;" onload="console.log('✅ Zoom image rendered: ${m.MP_ID}')">`;
-                console.log(`✅ Loaded zoom: ${record.qrCode}_${m.MP_ID}.png`);
+                imgEl.innerHTML = `<img src="${url}" alt="${m.MP_ID}" style="width:100%;height:auto;border-radius:2px;" onload="console.log('✅ Point view image rendered: ${m.MP_ID}')">`;
+                console.log(`✅ Loaded point view: ${record.qrCode}_${m.MP_ID}.png`);
                 
             } catch (error) {
                 let errorIcon = '❌';
@@ -1317,12 +1315,12 @@ function renderPointViewImages(record) {
                     errorMsg = 'Error';
                 }
                 
-                console.warn(`⚠️ Zoom image not available for ${m.MP_ID}:`, error.message);
+                console.warn(`⚠️ Point view image not available for ${m.MP_ID}:`, error.message);
                 imgEl.innerHTML = `<div style="padding:10px;font-size:9px;color:var(--text-secondary);line-height:1.3;">${errorIcon} ${errorMsg}</div>`;
             }
         }
         
-        console.log(`✅ Finished loading ${measurements.length} zoom images`);
+        console.log(`✅ Finished loading ${measurements.length} point view images`);
         
         // Attach event listeners for sliders and remove buttons
         document.querySelectorAll(`.zoom-size-slider[data-timestamp="${timestamp}"]`).forEach(slider => {
@@ -1358,7 +1356,7 @@ function renderPointViewImages(record) {
     return html;
 }
 
-// Render auto visualization (overview + zooms)
+// Render auto visualization (overview + point views)
 function renderAutoVisualization(record) {
     try {
         const projectDataStr = localStorage.getItem('measurementProject');
@@ -1389,9 +1387,9 @@ function renderAutoVisualization(record) {
             <div id="${overviewId}" style="min-height:100px;display:flex;align-items:center;justify-content:center;">⏳ Loading...</div>
         </div>`;
         
-        // Zooms section
+        // Point Views section
         html += `<div class="zooms-section">
-            <h4>Measurement Zooms</h4>
+            <h4>Measurement Point Views</h4>
             <div id="${zoomsContainerId}" class="zoom-grid">`;
         
         // Pre-generate all zoom IDs with the same timestamp
@@ -1447,7 +1445,7 @@ function renderAutoVisualization(record) {
                         const zoomUrl = await fs.getImageURL(zoomPath);
                         zoomEl.innerHTML = `<img src="${zoomUrl}" alt="${m.MP_ID}" style="width:100%;height:auto;">`;
                     } catch (e) {
-                        console.warn(`🔍 Zoom image not found for ${m.MP_ID}:`, e);
+                        console.warn(`🔍 Point view image not found for ${m.MP_ID}:`, e);
                         zoomEl.innerHTML = '<div style="font-size:9px;color:var(--text-secondary);">N/A</div>';
                     }
                 }
