@@ -601,8 +601,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                     appState.data.currentMap = mapData;
-                    if (mapData.meta?.backgroundFile) {
-                        await loadAndDisplayBackground(mapData.meta.backgroundFile);
+                    
+                    // Load background based on new structure or legacy backgroundFile
+                    if (mapData.meta) {
+                        let bgToLoad = null;
+                        
+                        // New structure: use defaultBackground
+                        if (mapData.meta.defaultBackground && mapData.meta.backgrounds) {
+                            const bg = mapData.meta.backgrounds.find(b => b.id === mapData.meta.defaultBackground);
+                            if (bg) bgToLoad = bg.fileName;
+                        }
+                        // Legacy structure: use backgroundFile
+                        else if (mapData.meta.backgroundFile) {
+                            bgToLoad = mapData.meta.backgroundFile;
+                        }
+                        
+                        if (bgToLoad) {
+                            await loadAndDisplayBackground(bgToLoad);
+                        }
                     }
                 } catch (err) { console.error(`Error loading map ${key}.map.json`, err); }
             }
@@ -854,6 +870,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const points = currentData.points || [];
         const meta = currentData.meta || {};
 
+        // Determine current background for filtering
+        const currentBgId = isEditor 
+            ? (meta.backgroundId || meta.defaultBackground || null)
+            : (meta.defaultBackground || null);
+        
+        // Filter points by background
+        const filteredPoints = points.filter(mp => {
+            if (currentBgId === null) {
+                // When no background is active, show only MPs without backgroundId
+                return !mp.backgroundId;
+            } else {
+                // When a background is active, show only MPs with matching backgroundId or no backgroundId
+                return !mp.backgroundId || mp.backgroundId === currentBgId;
+            }
+        });
+
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
         marker.id = `arrowhead`;
@@ -869,7 +901,7 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         dom.overlaySvg.appendChild(defs);
 
-        points.forEach(mp => {
+        filteredPoints.forEach(mp => {
             const arrowsToRender = mp.arrows || [{ x1: mp.x1, y1: mp.y1, x2: mp.x2, y2: mp.y2, style: mp.style }];
 
             arrowsToRender.forEach((arrow, index) => {
@@ -1077,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('editor-open', open);
         if (open) {
             if (isNew) {
-                appState.ui.editorState = { name: '', version: '', meta: { backgroundFile: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
+                appState.ui.editorState = { name: '', version: '', meta: { backgroundFile: null, backgrounds: [], defaultBackground: null, backgroundId: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
                 dom.mapSelect.value = '';
             } else {
                 const mapKey = dom.mapSelect.value;
@@ -1089,9 +1121,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.ui.editorState.version = version || '1';
                 appState.ui.editorState.originalFileName = mapKey;
             }
+            // Initialize meta structure if missing
+            if (!appState.ui.editorState.meta) {
+                appState.ui.editorState.meta = {};
+            }
+            if (!appState.ui.editorState.meta.backgrounds) {
+                appState.ui.editorState.meta.backgrounds = [];
+            }
+            // Migrate old backgroundFile to new backgrounds structure if needed
+            if (appState.ui.editorState.meta.backgroundFile && appState.ui.editorState.meta.backgrounds.length === 0) {
+                const bgId = `bg_migrated_${Date.now()}`;
+                appState.ui.editorState.meta.backgrounds.push({
+                    id: bgId,
+                    name: 'Background',
+                    fileName: appState.ui.editorState.meta.backgroundFile
+                });
+                appState.ui.editorState.meta.defaultBackground = bgId;
+            }
+            
             appState.ui.editorIsDirty = false;
             renderSchemaInspector();
-            loadAndDisplayBackground(appState.ui.editorState.meta?.backgroundFile);
+            
+            // Load background based on current selection or default
+            const bgToLoad = appState.ui.editorState.meta.backgroundId || appState.ui.editorState.meta.defaultBackground;
+            if (bgToLoad) {
+                const bg = appState.ui.editorState.meta.backgrounds.find(b => b.id === bgToLoad);
+                if (bg) loadAndDisplayBackground(bg.fileName);
+            }
+            
             resetCanvasView(false);
         } else {
             appState.ui.editorState = null;
@@ -1114,7 +1171,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="input-group"><label data-i18n="schemaVersion">${t('schemaVersion')}</label><input type="text" id="editor-schema-version" class="input-field" value="${editorData.version || ''}"></div>
             </div>
             ${isExistingSchema ? `<button id="editor-delete-schema-btn" class="btn" title="${t('deleteSchema')}">🗑️</button>` : ''}
-            <div id="editor-bg-control"><div class="input-group"><label><span data-i18n="drawingBackground">${t('drawingBackground')}</span></label><span id="editor-bg-filename">${editorData.meta.backgroundFile || 'None'}</span></div><button id="btn-editor-upload-bg" class="btn btn-secondary">Upload</button></div>
+            <div id="editor-bg-control">
+                <div class="input-group">
+                    <label>Backgrounds</label>
+                    <button id="btn-editor-upload-bg" class="btn btn-secondary">Upload New Background</button>
+                </div>
+                <div class="input-group">
+                    <label>Active Background (Editor View)</label>
+                    <select id="editor-current-bg-select" class="select-field">
+                        <option value="">None/Default</option>
+                        ${(editorData.meta.backgrounds || []).map(bg => 
+                            `<option value="${bg.id}" ${editorData.meta.backgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Default Background (Normal View)</label>
+                    <select id="editor-default-bg-select" class="select-field">
+                        <option value="">None</option>
+                        ${(editorData.meta.backgrounds || []).map(bg => 
+                            `<option value="${bg.id}" ${editorData.meta.defaultBackground === bg.id ? 'selected' : ''}>${bg.name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div id="editor-bg-list">
+                    ${(editorData.meta.backgrounds || []).map(bg => `
+                        <div class="bg-item" data-bg-id="${bg.id}">
+                            <span>${bg.name}</span>
+                            <span style="font-size:0.8em;color:var(--text-secondary);">${bg.fileName}</span>
+                            <button class="btn btn-secondary btn-delete-bg" data-bg-id="${bg.id}">🗑️</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
             <div id="editor-meta-control">
                 <label><span data-i18n="metaLabels">${t('metaLabels')}</span></label>
                 <div class="checkbox-group"><label><input type="checkbox" id="check-show-qr" ${editorData.meta.showQR ? 'checked' : ''}> <span data-i18n="showQR">${t('showQR')}</span></label><label><input type="checkbox" id="check-show-date" ${editorData.meta.showDate ? 'checked' : ''}> <span data-i18n="showDate">${t('showDate')}</span></label></div>
@@ -1127,6 +1216,45 @@ document.addEventListener('DOMContentLoaded', () => {
         contentDiv.querySelector('#check-show-qr').addEventListener('change', (e) => { editorData.meta.showQR = e.target.checked; if(e.target.checked && !editorData.meta.qrLabelPos) editorData.meta.qrLabelPos={x:100, y:50}; appState.ui.editorIsDirty = true; renderCanvas(); });
         contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos={x:100, y:80}; appState.ui.editorIsDirty = true; renderCanvas(); });
         contentDiv.querySelector('#btn-editor-upload-bg').addEventListener('click', () => dom.backgroundUploader.click());
+        
+        // Background selection for editor view
+        contentDiv.querySelector('#editor-current-bg-select').addEventListener('change', (e) => {
+            editorData.meta.backgroundId = e.target.value === '' ? null : e.target.value;
+            appState.ui.editorIsDirty = true;
+            const bg = (editorData.meta.backgrounds || []).find(b => b.id === editorData.meta.backgroundId);
+            if (bg) {
+                loadAndDisplayBackground(bg.fileName);
+            } else if (editorData.meta.defaultBackground) {
+                const defaultBg = (editorData.meta.backgrounds || []).find(b => b.id === editorData.meta.defaultBackground);
+                if (defaultBg) loadAndDisplayBackground(defaultBg.fileName);
+            } else {
+                dom.backgroundImg.src = '';
+            }
+            renderCanvas();
+        });
+        
+        // Default background selection
+        contentDiv.querySelector('#editor-default-bg-select').addEventListener('change', (e) => {
+            editorData.meta.defaultBackground = e.target.value === '' ? null : e.target.value;
+            appState.ui.editorIsDirty = true;
+        });
+        
+        // Background deletion
+        contentDiv.querySelectorAll('.btn-delete-bg').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const bgId = e.target.dataset.bgId;
+                if (confirm('Delete this background? MPs using it will be set to default.')) {
+                    editorData.meta.backgrounds = (editorData.meta.backgrounds || []).filter(b => b.id !== bgId);
+                    // Clear references
+                    if (editorData.meta.backgroundId === bgId) editorData.meta.backgroundId = null;
+                    if (editorData.meta.defaultBackground === bgId) editorData.meta.defaultBackground = null;
+                    editorData.points.forEach(mp => { if (mp.backgroundId === bgId) mp.backgroundId = null; });
+                    appState.ui.editorIsDirty = true;
+                    renderSchemaInspector();
+                    renderCanvas();
+                }
+            });
+        });
         const container = contentDiv.querySelector('#editor-properties-container');
         editorData.points.forEach(mp => renderMPCard(mp, container));
     };
@@ -1180,13 +1308,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 `).join('')}
             </div>`;
 
+        const backgroundOptions = (appState.ui.editorState.meta.backgrounds || []).map(bg => 
+            `<option value="${bg.id}" ${mp.backgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
+        ).join('');
+        
+        const backgroundSelectHtml = `
+            <div class="input-group">
+                <label>Background</label>
+                <select class="select-field mp-bg-select" data-prop="backgroundId">
+                    <option value="">Default/None</option>
+                    ${backgroundOptions}
+                </select>
+            </div>`;
+
         const viewControlsHtml = `
             <div class="editor-view-controls">
                 <button class="btn btn-secondary" data-action="set-view">${t('setView')}</button>
                 <button class="btn btn-secondary" data-action="clear-view" ${!mp.view ? 'disabled' : ''}>${t('clearView')}</button>
             </div>`;
 
-        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><select class="select-field editor-point-type" data-prop="type"><option value="single" ${mp.type==='single'?'selected':''}>Single</option><option value="table" ${mp.type==='table'?'selected':''}>Table</option></select><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name}"></div>${typeHtml}${arrowsHtml}${viewControlsHtml}`;
+        card.innerHTML = `<div class="editor-point-header"><input type="text" class="input-field editor-point-id-input" value="${mp.id}" title="Change Point ID"><div class="editor-point-actions"><select class="select-field editor-point-type" data-prop="type"><option value="single" ${mp.type==='single'?'selected':''}>Single</option><option value="table" ${mp.type==='table'?'selected':''}>Table</option></select><button class="editor-icon-btn delete" data-action="delete-mp" title="Delete Point">🗑️</button></div></div><div class="input-group"><label>${t('name')}</label><input type="text" class="input-field" data-prop="name" value="${mp.name}"></div>${backgroundSelectHtml}${typeHtml}${arrowsHtml}${viewControlsHtml}`;
         container.appendChild(card);
 
         card.querySelector('.editor-point-id-input').addEventListener('change', (e) => {
@@ -1221,10 +1362,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         card.querySelectorAll('[data-prop]').forEach(input => {
-            input.addEventListener('input', (e) => {
+            const eventType = input.classList.contains('mp-bg-select') ? 'change' : 'input';
+            input.addEventListener(eventType, (e) => {
                 appState.ui.editorIsDirty = true;
                 const path = e.target.dataset.prop.split('.');
                 let val = e.target.value;
+                // Handle backgroundId - empty string should be null
+                if (path[0] === 'backgroundId') {
+                    val = val === '' ? null : val;
+                }
                 if (path[path.length - 1].match(/nominal|min|max|width/)) val = parseFloat(val.replace(',', '.')) || val;
                 let target = mp;
                 for (let i = 0; i < path.length - 1; i++) target = target[path[i]] = target[path[i]] || {};
@@ -1478,12 +1624,20 @@ document.addEventListener('DOMContentLoaded', () => {
             delete s.name;
             delete s.version;
             delete s.originalFileName;
-            // Ensure views are preserved in points
+            // Ensure views and backgroundId are preserved in points
             if (s.points) {
                 s.points = s.points.map(mp => ({
                     ...mp,
-                    view: mp.view || null  // Explicitly include view (even if null)
+                    view: mp.view || null,  // Explicitly include view (even if null)
+                    backgroundId: mp.backgroundId || null  // Explicitly include backgroundId
                 }));
+            }
+            // Ensure meta.backgrounds, defaultBackground, and backgroundId are preserved
+            if (s.meta) {
+                s.meta.backgrounds = s.meta.backgrounds || [];
+                s.meta.defaultBackground = s.meta.defaultBackground || null;
+                // Don't save backgroundId (editor view state) - it's temporary
+                delete s.meta.backgroundId;
             }
             await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'maps'), `${fn}.map.json`), JSON.stringify(s, null, 2));
             if (appState.ui.editorState.originalFileName && appState.ui.editorState.originalFileName !== fn) {
@@ -2880,13 +3034,49 @@ document.addEventListener('DOMContentLoaded', () => {
    
     dom.backgroundUploader.addEventListener('change', async (e) => {
         const f = e.target.files[0];
-        if (f && appState.ui.editorState?.name) {
-            const fn = `${appState.ui.editorState.name}_v${appState.ui.editorState.version}.${f.name.split('.').pop()}`;
-            await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'backgrounds'), fn), f);
-            appState.ui.editorState.meta.backgroundFile = fn;
-            renderSchemaInspector();
-            loadAndDisplayBackground(fn);
+        if (f && appState.ui.editorState) {
+            // Generate unique ID for this background
+            const bgId = `bg_${Date.now()}`;
+            const originalName = f.name.replace(/\.[^/.]+$/, ''); // Remove extension
+            const ext = f.name.split('.').pop();
+            const fn = `${bgId}.${ext}`;
+            
+            try {
+                // Save the file
+                await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'backgrounds'), fn), f);
+                
+                // Initialize backgrounds array if needed
+                if (!appState.ui.editorState.meta.backgrounds) {
+                    appState.ui.editorState.meta.backgrounds = [];
+                }
+                
+                // Add to backgrounds array
+                appState.ui.editorState.meta.backgrounds.push({
+                    id: bgId,
+                    name: originalName,
+                    fileName: fn
+                });
+                
+                // If this is the first background, set it as default
+                if (appState.ui.editorState.meta.backgrounds.length === 1) {
+                    appState.ui.editorState.meta.defaultBackground = bgId;
+                    appState.ui.editorState.meta.backgroundId = bgId;
+                }
+                
+                appState.ui.editorIsDirty = true;
+                renderSchemaInspector();
+                
+                // Load the new background if it's now active
+                if (appState.ui.editorState.meta.backgroundId === bgId) {
+                    loadAndDisplayBackground(fn);
+                }
+            } catch (err) {
+                console.error('Error uploading background:', err);
+                alert('Failed to upload background file');
+            }
         }
+        // Reset the input so the same file can be selected again
+        e.target.value = '';
     });
 
     dom.btnNewSchema.addEventListener('click', () => toggleEditor(true, true));

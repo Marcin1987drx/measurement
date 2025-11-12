@@ -221,8 +221,13 @@ select[multiple].select-field { height: 150px; padding: 12px; background-image: 
 
 #editor-schema-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;}
 #editor-bg-control, #editor-meta-control { padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: var(--bg-primary); }
-#editor-bg-control .input-group { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+#editor-bg-control .input-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+#editor-bg-control .input-group label { font-weight: 600; font-size: 0.9em; }
 #editor-bg-filename { font-style: italic; color: var(--text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#editor-bg-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+#editor-bg-list .bg-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; gap: 8px; }
+#editor-bg-list .bg-item span:first-child { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#editor-bg-list .btn-delete-bg { padding: 4px 8px; font-size: 0.9em; }
 #editor-meta-control .checkbox-group { display: flex; gap: 16px; align-items: center;}
 
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 1000; }
