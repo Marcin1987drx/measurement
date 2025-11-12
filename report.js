@@ -74,8 +74,8 @@ const translations = {
         singleField: 'Single Field',
         visualization: 'Visualization',
         overviewImage: 'Overview Image',
-        zoomImages: 'Zoom Images',
-        autoVisualization: 'Auto (Overview + Zooms)',
+        pointViewImages: 'Point Views',
+        autoVisualization: 'Auto (Overview + Points)',
         new: 'New',
         open: 'Open',
         save: 'Save',
@@ -85,9 +85,6 @@ const translations = {
         zoom: 'Zoom',
         grid: 'Grid',
         snap: 'Snap',
-        rulers: 'Rulers',
-        designer: 'Designer',
-        generator: 'Generator',
         addPage: 'Add Page',
         properties: 'Properties',
         selectElement: 'Select an element to edit properties',
@@ -117,8 +114,8 @@ const translations = {
         singleField: 'Pojedyncze pole',
         visualization: 'Wizualizacja',
         overviewImage: 'Obraz poglądowy',
-        zoomImages: 'Obrazy powiększone',
-        autoVisualization: 'Auto (Przegląd + Powiększenia)',
+        pointViewImages: 'Widoki punktów',
+        autoVisualization: 'Auto (Przegląd + Punkty)',
         new: 'Nowy',
         open: 'Otwórz',
         save: 'Zapisz',
@@ -128,9 +125,6 @@ const translations = {
         zoom: 'Powiększenie',
         grid: 'Siatka',
         snap: 'Przyciąganie',
-        rulers: 'Linijki',
-        designer: 'Projektant',
-        generator: 'Generator',
         addPage: 'Dodaj stronę',
         properties: 'Właściwości',
         selectElement: 'Wybierz element, aby edytować właściwości',
@@ -160,8 +154,8 @@ const translations = {
         singleField: 'Einzelfeld',
         visualization: 'Visualisierung',
         overviewImage: 'Übersichtsbild',
-        zoomImages: 'Zoom-Bilder',
-        autoVisualization: 'Auto (Übersicht + Zooms)',
+        pointViewImages: 'Punktansichten',
+        autoVisualization: 'Auto (Übersicht + Punkte)',
         new: 'Neu',
         open: 'Öffnen',
         save: 'Speichern',
@@ -171,9 +165,6 @@ const translations = {
         zoom: 'Zoom',
         grid: 'Raster',
         snap: 'Einrasten',
-        rulers: 'Lineale',
-        designer: 'Designer',
-        generator: 'Generator',
         addPage: 'Seite hinzufügen',
         properties: 'Eigenschaften',
         selectElement: 'Wählen Sie ein Element zum Bearbeiten der Eigenschaften',
@@ -891,7 +882,7 @@ function getElementContent(type) {
             : '<div class="element-field">📈 Chart</div>',
         field: '<div class="element-field">🔍 Field Value</div>',
         vizOverview: currentRecord ? renderOverviewImage(currentRecord) : '<div class="element-field">🌅 Overview Image</div>',
-        vizZooms: currentRecord ? renderZoomImages(currentRecord) : '<div class="element-field">🔎 Zoom Images</div>',
+        vizPointViews: currentRecord ? renderPointViewImages(currentRecord) : '<div class="element-field">🔎 Point Views</div>',
         vizAuto: currentRecord ? renderAutoVisualization(currentRecord) : '<div class="element-field">🤖 Auto Visualization</div>',
         pageNumber: '<div class="element-field">Page {page}</div>'
     };
@@ -1204,7 +1195,7 @@ function renderOverviewImage(record) {
 }
 
 // Render zoom images from project folder
-function renderZoomImages(record) {
+function renderPointViewImages(record) {
     if (!record || !record.qrCode) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No record selected</div>';
     }
@@ -2417,11 +2408,17 @@ function generatePDF() {
         const doc = new jsPDF({
             orientation: reportState.template.meta.orientation || 'portrait',
             unit: 'mm',
-            format: 'a4'
+            format: 'a4',
+            compress: true
         });
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
+        
+        // Force light mode for PDF export (white background, black text)
+        doc.setFillColor(255, 255, 255); // White background
+        doc.rect(0, 0, pageWidth, pageHeight, 'F'); // Fill entire page
+        doc.setTextColor(0, 0, 0); // Black text
         
         // Get all pages
         const pages = document.querySelectorAll('.canvas-page');
@@ -2448,8 +2445,8 @@ function generatePDF() {
                 const width = parseInt(element.style.width) || 200;
                 const height = parseInt(element.style.height) || 50;
                 
-                // Convert pixel coordinates to mm (rough conversion: 1px ≈ 0.26mm)
-                const pxToMm = 0.26;
+                // Convert pixel coordinates to mm (accurate conversion: 1px = 0.2645833mm @ 96 DPI)
+                const pxToMm = 0.2645833;
                 const xMm = x * pxToMm;
                 const yMm = y * pxToMm;
                 const widthMm = width * pxToMm;

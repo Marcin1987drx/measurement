@@ -204,10 +204,8 @@
 }
 
 .canvas-page {
-    width: 794px;
-    height: 1123px;
-    min-width: 210mm; /* A4 width */
-    min-height: 297mm; /* A4 height */
+    width: 794px; /* A4 width @ 96 DPI */
+    height: 1123px; /* A4 height @ 96 DPI */
     background-color: var(--canvas-paper);
     box-shadow: var(--page-shadow);
     border-radius: var(--radius-sm);
