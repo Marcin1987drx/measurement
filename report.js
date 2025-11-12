@@ -1251,6 +1251,15 @@ function renderPointViewImages(record, config = {}) {
         measurements = measurements.filter(m => m.backgroundId === config.backgroundId || !m.backgroundId);
     }
     
+    // Apply MP visibility filter (from Properties Panel checkboxes)
+    const hiddenMPs = config.hiddenMPs || [];
+    if (hiddenMPs.length > 0) {
+        measurements = measurements.filter(m => !hiddenMPs.includes(m.MP_ID));
+    }
+    
+    // Get MP sizes from config
+    const mpSizes = config.mpSizes || {};
+    
     if (measurements.length === 0) {
         return '<div class="element-field" style="padding:16px;text-align:center;color:var(--text-secondary);">🔍 No measurements match the filters</div>';
     }
@@ -1271,24 +1280,19 @@ function renderPointViewImages(record, config = {}) {
         const statusText = isOK ? 'OK' : 'NOK';
         const statusColor = isOK ? '#34c759' : '#ff3b30';
         
+        // Get size for this MP from config (default 50%)
+        const mpSize = mpSizes[m.MP_ID] || 50;
+        
         html += `
             <div class="zoom-item-wrapper ${wrapperClass}" data-mp-id="${m.MP_ID}" data-zoom-index="${idx}">
-                <!-- Controls Bar -->
-                <div class="zoom-controls">
-                    <label style="font-weight:600;color:var(--text-primary);">${m.MP_ID}</label>
-                    <input type="range" 
-                           class="zoom-size-slider" 
-                           min="10" 
-                           max="100" 
-                           value="50" 
-                           data-zoom-index="${idx}"
-                           data-timestamp="${timestamp}">
-                    <span class="zoom-size-label">50%</span>
-                    <button class="zoom-remove-btn" data-zoom-index="${idx}" data-wrapper-class="${wrapperClass}">✖</button>
+                <!-- Header -->
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg-secondary);border-radius:4px 4px 0 0;">
+                    <label style="font-weight:600;color:var(--text-primary);">${statusIcon} ${m.MP_ID}</label>
+                    <span style="font-size:0.85em;color:var(--text-secondary);">${mpSize}%</span>
                 </div>
                 
                 <!-- Zoom Image -->
-                <div class="zoom-image-container" id="${imgId}" style="width: 50%;">
+                <div class="zoom-image-container" id="${imgId}" style="width: ${mpSize}%;margin:8px auto;">
                     <div style="font-size:1.5em;">⏳</div>
                 </div>
                 
@@ -1373,36 +1377,6 @@ function renderPointViewImages(record, config = {}) {
         }
         
         console.log(`✅ Finished loading ${measurements.length} point view images`);
-        
-        // Attach event listeners for sliders and remove buttons
-        document.querySelectorAll(`.zoom-size-slider[data-timestamp="${timestamp}"]`).forEach(slider => {
-            slider.addEventListener('input', (e) => {
-                const idx = e.target.dataset.zoomIndex;
-                const ts = e.target.dataset.timestamp;
-                const size = e.target.value;
-                const container = document.getElementById(`${baseImgId}-${idx}`);
-                const label = e.target.parentElement.querySelector('.zoom-size-label');
-                
-                if (container) {
-                    container.style.width = `${size}%`;
-                }
-                if (label) {
-                    label.textContent = `${size}%`;
-                }
-            });
-        });
-        
-        document.querySelectorAll('.zoom-remove-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const wrapperClass = e.target.dataset.wrapperClass;
-                const wrapper = document.querySelector(`.${wrapperClass}`);
-                if (wrapper && confirm('Remove this zoom image?')) {
-                    wrapper.style.opacity = '0';
-                    wrapper.style.transition = 'opacity 0.3s';
-                    setTimeout(() => wrapper.remove(), 300);
-                }
-            });
-        });
     }, 100);
     
     return html;
@@ -1991,6 +1965,53 @@ function updatePropertiesPanel(element) {
         const backgrounds = getProjectBackgrounds();
         const currentBgId = element.dataset.backgroundId || '';
         
+        // Get current record to list MPs
+        const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+            ? reportState.project.records[reportState.project.currentRecordIndex] 
+            : null;
+        
+        let mpControlsHtml = '';
+        if (currentRecord && currentRecord.measurements) {
+            const measurements = currentRecord.measurements.filter(m => m.Value);
+            
+            // Get hidden MPs from element data attribute
+            const hiddenMPs = element.dataset.hiddenMps ? element.dataset.hiddenMps.split(',') : [];
+            
+            // Get MP sizes from element data attribute
+            const mpSizes = {};
+            if (element.dataset.mpSizes) {
+                try {
+                    Object.assign(mpSizes, JSON.parse(element.dataset.mpSizes));
+                } catch (e) {
+                    console.warn('Failed to parse mpSizes:', e);
+                }
+            }
+            
+            mpControlsHtml = measurements.map(m => {
+                const isHidden = hiddenMPs.includes(m.MP_ID);
+                const size = mpSizes[m.MP_ID] || 50;
+                const isOK = m.Status === 'OK' || (m.Value >= m.Min && m.Value <= m.Max);
+                const statusIcon = isOK ? '✅' : '❌';
+                
+                return `
+                    <div class="mp-control-item" data-mp-id="${m.MP_ID}" style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border-color);border-radius:4px;margin-bottom:8px;">
+                        <label style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
+                            <input type="checkbox" class="mp-visibility-checkbox" data-mp-id="${m.MP_ID}" ${!isHidden ? 'checked' : ''}>
+                            <span style="font-size:0.9em;font-weight:600;">${statusIcon} ${m.MP_ID}</span>
+                        </label>
+                        <input type="range" 
+                               class="mp-size-slider" 
+                               data-mp-id="${m.MP_ID}"
+                               min="10" 
+                               max="100" 
+                               value="${size}" 
+                               style="flex:1;">
+                        <span class="mp-size-value" style="font-size:0.85em;min-width:40px;text-align:right;">${size}%</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
         html += `
             <div class="property-section">
                 <div class="property-section-title">Point Views Settings</div>
@@ -2007,7 +2028,7 @@ function updatePropertiesPanel(element) {
                 </div>
                 <div class="property-row full">
                     <div class="property-field">
-                        <label class="property-label">Display Options</label>
+                        <label class="property-label">Filter by Status</label>
                         <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
                             <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;">
                                 <input type="checkbox" id="prop-show-ok-only" ${element.dataset.showOkOnly === 'true' ? 'checked' : ''}>
@@ -2020,6 +2041,16 @@ function updatePropertiesPanel(element) {
                         </div>
                     </div>
                 </div>
+                ${mpControlsHtml ? `
+                    <div class="property-row full" style="margin-top:16px;">
+                        <div class="property-field">
+                            <label class="property-label">Measurement Points Control</label>
+                            <div class="mp-controls-list" style="margin-top:8px;max-height:400px;overflow-y:auto;">
+                                ${mpControlsHtml}
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
@@ -2202,9 +2233,80 @@ function attachPropertyListeners(element) {
                 element.innerHTML = renderPointViewImages(currentRecord, {
                     backgroundId: element.dataset.backgroundId || null,
                     showOkOnly: element.dataset.showOkOnly === 'true',
-                    showNokOnly: e.target.checked
+                    showNokOnly: e.target.checked,
+                    hiddenMPs: element.dataset.hiddenMps ? element.dataset.hiddenMps.split(',') : [],
+                    mpSizes: element.dataset.mpSizes ? JSON.parse(element.dataset.mpSizes) : {}
                 });
             }
+        });
+        
+        // MP visibility checkboxes
+        document.querySelectorAll('.mp-visibility-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const mpId = e.target.dataset.mpId;
+                let hiddenMPs = element.dataset.hiddenMps ? element.dataset.hiddenMps.split(',').filter(id => id) : [];
+                
+                if (!e.target.checked) {
+                    // Hide this MP
+                    if (!hiddenMPs.includes(mpId)) {
+                        hiddenMPs.push(mpId);
+                    }
+                } else {
+                    // Show this MP
+                    hiddenMPs = hiddenMPs.filter(id => id !== mpId);
+                }
+                
+                element.dataset.hiddenMps = hiddenMPs.join(',');
+                console.log(`🔄 MP ${mpId} visibility changed: ${e.target.checked ? 'visible' : 'hidden'}`);
+                
+                // Re-render with new visibility settings
+                const currentRecord = reportState.project.records && reportState.project.records.length > 0 
+                    ? reportState.project.records[reportState.project.currentRecordIndex] 
+                    : null;
+                if (currentRecord) {
+                    element.innerHTML = renderPointViewImages(currentRecord, {
+                        backgroundId: element.dataset.backgroundId || null,
+                        showOkOnly: element.dataset.showOkOnly === 'true',
+                        showNokOnly: element.dataset.showNokOnly === 'true',
+                        hiddenMPs: hiddenMPs,
+                        mpSizes: element.dataset.mpSizes ? JSON.parse(element.dataset.mpSizes) : {}
+                    });
+                }
+            });
+        });
+        
+        // MP size sliders
+        document.querySelectorAll('.mp-size-slider').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const mpId = e.target.dataset.mpId;
+                const size = parseInt(e.target.value);
+                
+                // Update the size label
+                const sizeLabel = e.target.parentElement.querySelector('.mp-size-value');
+                if (sizeLabel) {
+                    sizeLabel.textContent = `${size}%`;
+                }
+                
+                // Store size in element data
+                let mpSizes = {};
+                if (element.dataset.mpSizes) {
+                    try {
+                        mpSizes = JSON.parse(element.dataset.mpSizes);
+                    } catch (e) {
+                        console.warn('Failed to parse mpSizes:', e);
+                    }
+                }
+                mpSizes[mpId] = size;
+                element.dataset.mpSizes = JSON.stringify(mpSizes);
+                
+                console.log(`📏 MP ${mpId} size changed to: ${size}%`);
+                
+                // Update the image size in real-time
+                const imgContainer = element.querySelector(`[data-mp-id="${mpId}"] .zoom-image-container`);
+                if (imgContainer) {
+                    imgContainer.style.width = `${size}%`;
+                }
+            });
         });
     }
     
