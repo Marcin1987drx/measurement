@@ -870,21 +870,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const points = currentData.points || [];
         const meta = currentData.meta || {};
 
-        // Determine current background for filtering
-        const currentBgId = isEditor 
-            ? (meta.backgroundId || meta.defaultBackground || null)
-            : (meta.defaultBackground || null);
+        // Determine which background is being viewed
+        // If a specific MP is selected and has its own background, use that
+        // Otherwise, use the global background
+        let viewingBgId = meta.globalBackground || null;
+        
+        if (isEditor && appState.ui.selectedMPId) {
+            const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
+            if (selectedMP && selectedMP.backgroundId) {
+                viewingBgId = selectedMP.backgroundId;
+                console.log(`🔍 Viewing MP ${selectedMP.id}'s specific background: ${viewingBgId}`);
+            }
+        }
         
         // Filter points by background
+        // CORRECT LOGIC per requirements:
+        // 1. When viewing GLOBAL background → show ONLY MPs WITHOUT specific backgroundId
+        // 2. When viewing SPECIFIC background → show MPs WITH that backgroundId + MPs WITHOUT backgroundId
         const filteredPoints = points.filter(mp => {
-            if (currentBgId === null) {
-                // When no background is active, show only MPs without backgroundId
-                return !mp.backgroundId;
+            if (!mp.backgroundId) {
+                // MP has no specific background - ALWAYS visible (uses whatever background is active)
+                return true;
+            } else if (viewingBgId === meta.globalBackground) {
+                // Viewing global background - HIDE MPs with specific backgrounds
+                const visible = false;
+                console.log(`❌ MP ${mp.id}: Has specific background ${mp.backgroundId}, hidden when viewing global`);
+                return visible;
             } else {
-                // When a background is active, show only MPs with matching backgroundId or no backgroundId
-                return !mp.backgroundId || mp.backgroundId === currentBgId;
+                // Viewing a specific background - show only if it matches
+                const visible = mp.backgroundId === viewingBgId;
+                console.log(`${visible ? '✅' : '❌'} MP ${mp.id}: Background ${mp.backgroundId} ${visible ? 'matches' : 'does not match'} viewed ${viewingBgId}`);
+                return visible;
             }
         });
+        
+        console.log(`📊 Filtered ${filteredPoints.length}/${points.length} MPs for background ${viewingBgId || 'none'}`);
 
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
@@ -1109,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('editor-open', open);
         if (open) {
             if (isNew) {
-                appState.ui.editorState = { name: '', version: '', meta: { backgroundFile: null, backgrounds: [], defaultBackground: null, backgroundId: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
+                appState.ui.editorState = { name: '', version: '', meta: { backgrounds: [], globalBackground: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
                 dom.mapSelect.value = '';
             } else {
                 const mapKey = dom.mapSelect.value;
@@ -1128,25 +1148,43 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!appState.ui.editorState.meta.backgrounds) {
                 appState.ui.editorState.meta.backgrounds = [];
             }
-            // Migrate old backgroundFile to new backgrounds structure if needed
+            
+            // Migrate old data structures to new globalBackground system
             if (appState.ui.editorState.meta.backgroundFile && appState.ui.editorState.meta.backgrounds.length === 0) {
+                // Migrate very old single backgroundFile
                 const bgId = `bg_migrated_${Date.now()}`;
                 appState.ui.editorState.meta.backgrounds.push({
                     id: bgId,
                     name: 'Background',
                     fileName: appState.ui.editorState.meta.backgroundFile
                 });
-                appState.ui.editorState.meta.defaultBackground = bgId;
+                appState.ui.editorState.meta.globalBackground = bgId;
+                console.log('🔄 Migrated old backgroundFile to globalBackground');
+            } else if (appState.ui.editorState.meta.defaultBackground && !appState.ui.editorState.meta.globalBackground) {
+                // Migrate defaultBackground to globalBackground
+                appState.ui.editorState.meta.globalBackground = appState.ui.editorState.meta.defaultBackground;
+                console.log('🔄 Migrated defaultBackground to globalBackground');
+            } else if (appState.ui.editorState.meta.backgroundId && !appState.ui.editorState.meta.globalBackground) {
+                // Migrate backgroundId (Active) to globalBackground
+                appState.ui.editorState.meta.globalBackground = appState.ui.editorState.meta.backgroundId;
+                console.log('🔄 Migrated backgroundId to globalBackground');
             }
             
             appState.ui.editorIsDirty = false;
             renderSchemaInspector();
             
-            // Load background based on current selection or default
-            const bgToLoad = appState.ui.editorState.meta.backgroundId || appState.ui.editorState.meta.defaultBackground;
+            // Load global background if set
+            const bgToLoad = appState.ui.editorState.meta.globalBackground;
             if (bgToLoad) {
                 const bg = appState.ui.editorState.meta.backgrounds.find(b => b.id === bgToLoad);
-                if (bg) loadAndDisplayBackground(bg.fileName);
+                if (bg) {
+                    loadAndDisplayBackground(bg.fileName);
+                    console.log(`🖼️ Loaded global background: ${bg.name}`);
+                } else {
+                    console.warn(`⚠️ Global background ${bgToLoad} not found in backgrounds array`);
+                }
+            } else {
+                console.log('ℹ️ No global background set');
             }
             
             resetCanvasView(false);
@@ -1174,32 +1212,26 @@ document.addEventListener('DOMContentLoaded', () => {
             <div id="editor-bg-control">
                 <div class="input-group">
                     <label>Backgrounds</label>
-                    <button id="btn-editor-upload-bg" class="btn btn-secondary">Upload New Background</button>
+                    <button id="btn-editor-upload-bg" class="btn btn-secondary">📤 Upload New Background</button>
                 </div>
                 <div class="input-group">
-                    <label>Active Background (Editor View)</label>
-                    <select id="editor-current-bg-select" class="select-field">
-                        <option value="">None/Default</option>
-                        ${(editorData.meta.backgrounds || []).map(bg => 
-                            `<option value="${bg.id}" ${editorData.meta.backgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
-                        ).join('')}
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Default Background (Normal View)</label>
-                    <select id="editor-default-bg-select" class="select-field">
+                    <label>Global Background (Default for all MPs)</label>
+                    <select id="editor-global-bg-select" class="select-field">
                         <option value="">None</option>
                         ${(editorData.meta.backgrounds || []).map(bg => 
-                            `<option value="${bg.id}" ${editorData.meta.defaultBackground === bg.id ? 'selected' : ''}>${bg.name}</option>`
+                            `<option value="${bg.id}" ${editorData.meta.globalBackground === bg.id ? 'selected' : ''}>${bg.name}</option>`
                         ).join('')}
                     </select>
                 </div>
-                <div id="editor-bg-list">
+                <div id="editor-bg-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px;">
                     ${(editorData.meta.backgrounds || []).map(bg => `
-                        <div class="bg-item" data-bg-id="${bg.id}">
-                            <span>${bg.name}</span>
-                            <span style="font-size:0.8em;color:var(--text-secondary);">${bg.fileName}</span>
-                            <button class="btn btn-secondary btn-delete-bg" data-bg-id="${bg.id}">🗑️</button>
+                        <div class="bg-thumbnail" data-bg-id="${bg.id}" style="position: relative; border: 2px solid ${editorData.meta.globalBackground === bg.id ? 'var(--accent-color)' : 'var(--border-color)'}; border-radius: 8px; padding: 8px; background: var(--panel-bg); cursor: pointer;">
+                            <div style="width: 100%; height: 100px; background: var(--canvas-bg); border-radius: 4px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                <span style="font-size: 2em;">🖼️</span>
+                            </div>
+                            <div style="font-size: 0.85em; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${bg.name}">${bg.name}</div>
+                            <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${bg.fileName}">${bg.fileName}</div>
+                            <button class="btn btn-secondary btn-delete-bg" data-bg-id="${bg.id}" style="width: 100%; padding: 4px 8px; font-size: 0.85em;">🗑️ Delete</button>
                         </div>
                     `).join('')}
                 </div>
@@ -1217,38 +1249,64 @@ document.addEventListener('DOMContentLoaded', () => {
         contentDiv.querySelector('#check-show-date').addEventListener('change', (e) => { editorData.meta.showDate = e.target.checked; if(e.target.checked && !editorData.meta.dateLabelPos) editorData.meta.dateLabelPos={x:100, y:80}; appState.ui.editorIsDirty = true; renderCanvas(); });
         contentDiv.querySelector('#btn-editor-upload-bg').addEventListener('click', () => dom.backgroundUploader.click());
         
-        // Background selection for editor view
-        contentDiv.querySelector('#editor-current-bg-select').addEventListener('change', (e) => {
-            editorData.meta.backgroundId = e.target.value === '' ? null : e.target.value;
+        // Global background selection with live preview
+        contentDiv.querySelector('#editor-global-bg-select').addEventListener('change', (e) => {
+            const newGlobalBgId = e.target.value === '' ? null : e.target.value;
+            editorData.meta.globalBackground = newGlobalBgId;
             appState.ui.editorIsDirty = true;
-            const bg = (editorData.meta.backgrounds || []).find(b => b.id === editorData.meta.backgroundId);
+            
+            console.log(`🌐 Global background changed to: ${newGlobalBgId || 'None'}`);
+            
+            const bg = (editorData.meta.backgrounds || []).find(b => b.id === newGlobalBgId);
             if (bg) {
                 loadAndDisplayBackground(bg.fileName);
-            } else if (editorData.meta.defaultBackground) {
-                const defaultBg = (editorData.meta.backgrounds || []).find(b => b.id === editorData.meta.defaultBackground);
-                if (defaultBg) loadAndDisplayBackground(defaultBg.fileName);
+                console.log(`🖼️ Loading global background: ${bg.name} (${bg.fileName})`);
             } else {
                 dom.backgroundImg.src = '';
+                console.log(`🖼️ Cleared background (no global background set)`);
             }
             renderCanvas();
         });
         
-        // Default background selection
-        contentDiv.querySelector('#editor-default-bg-select').addEventListener('change', (e) => {
-            editorData.meta.defaultBackground = e.target.value === '' ? null : e.target.value;
-            appState.ui.editorIsDirty = true;
+        // Background thumbnail click to set as global
+        contentDiv.querySelectorAll('.bg-thumbnail').forEach(thumb => {
+            thumb.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-delete-bg')) return; // Don't trigger on delete button
+                const bgId = thumb.dataset.bgId;
+                editorData.meta.globalBackground = bgId;
+                appState.ui.editorIsDirty = true;
+                
+                const bg = (editorData.meta.backgrounds || []).find(b => b.id === bgId);
+                if (bg) {
+                    loadAndDisplayBackground(bg.fileName);
+                    console.log(`🖼️ Set global background via thumbnail: ${bg.name}`);
+                }
+                renderSchemaInspector();
+                renderCanvas();
+            });
         });
         
         // Background deletion
         contentDiv.querySelectorAll('.btn-delete-bg').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent thumbnail click
                 const bgId = e.target.dataset.bgId;
-                if (confirm('Delete this background? MPs using it will be set to default.')) {
+                const bg = (editorData.meta.backgrounds || []).find(b => b.id === bgId);
+                if (confirm(`Delete background "${bg?.name || bgId}"? MPs using it will revert to global background.`)) {
+                    console.log(`🗑️ Deleting background: ${bg?.name || bgId}`);
                     editorData.meta.backgrounds = (editorData.meta.backgrounds || []).filter(b => b.id !== bgId);
                     // Clear references
-                    if (editorData.meta.backgroundId === bgId) editorData.meta.backgroundId = null;
-                    if (editorData.meta.defaultBackground === bgId) editorData.meta.defaultBackground = null;
-                    editorData.points.forEach(mp => { if (mp.backgroundId === bgId) mp.backgroundId = null; });
+                    if (editorData.meta.globalBackground === bgId) {
+                        editorData.meta.globalBackground = null;
+                        dom.backgroundImg.src = '';
+                        console.log(`🌐 Cleared global background`);
+                    }
+                    editorData.points.forEach(mp => { 
+                        if (mp.backgroundId === bgId) {
+                            mp.backgroundId = null;
+                            console.log(`🔄 Reset MP ${mp.id} to use global background`);
+                        }
+                    });
                     appState.ui.editorIsDirty = true;
                     renderSchemaInspector();
                     renderCanvas();
@@ -1314,9 +1372,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const backgroundSelectHtml = `
             <div class="input-group">
-                <label>Background</label>
+                <label>MP Background</label>
                 <select class="select-field mp-bg-select" data-prop="backgroundId">
-                    <option value="">Default/None</option>
+                    <option value="">Use Global</option>
                     ${backgroundOptions}
                 </select>
             </div>`;
@@ -1370,6 +1428,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Handle backgroundId - empty string should be null
                 if (path[0] === 'backgroundId') {
                     val = val === '' ? null : val;
+                    
+                    // When MP background changes, load that background for viewing
+                    if (val) {
+                        const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === val);
+                        if (bg) {
+                            loadAndDisplayBackground(bg.fileName);
+                            console.log(`🖼️ MP ${mp.id} background changed to: ${bg.name}, loading image`);
+                        }
+                    } else {
+                        // MP set to use global - load global background
+                        const globalBgId = appState.ui.editorState.meta.globalBackground;
+                        if (globalBgId) {
+                            const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === globalBgId);
+                            if (bg) {
+                                loadAndDisplayBackground(bg.fileName);
+                                console.log(`🖼️ MP ${mp.id} set to use global, loading global background: ${bg.name}`);
+                            }
+                        } else {
+                            dom.backgroundImg.src = '';
+                            console.log(`🖼️ MP ${mp.id} set to use global, but no global background set`);
+                        }
+                    }
                 }
                 if (path[path.length - 1].match(/nominal|min|max|width/)) val = parseFloat(val.replace(',', '.')) || val;
                 let target = mp;
@@ -3055,46 +3135,67 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.mapSelect.addEventListener('change', handleMapSelect);
    
     dom.backgroundUploader.addEventListener('change', async (e) => {
-        const f = e.target.files[0];
-        if (f && appState.ui.editorState) {
-            // Generate unique ID for this background
-            const bgId = `bg_${Date.now()}`;
-            const originalName = f.name.replace(/\.[^/.]+$/, ''); // Remove extension
-            const ext = f.name.split('.').pop();
-            const fn = `${bgId}.${ext}`;
+        const files = Array.from(e.target.files);
+        if (files.length > 0 && appState.ui.editorState) {
+            console.log(`📤 Uploading ${files.length} background(s)...`);
             
-            try {
-                // Save the file
-                await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'backgrounds'), fn), f);
-                
-                // Initialize backgrounds array if needed
-                if (!appState.ui.editorState.meta.backgrounds) {
-                    appState.ui.editorState.meta.backgrounds = [];
+            // Initialize backgrounds array if needed
+            if (!appState.ui.editorState.meta.backgrounds) {
+                appState.ui.editorState.meta.backgrounds = [];
+            }
+            
+            const isFirstBackground = appState.ui.editorState.meta.backgrounds.length === 0;
+            let uploadedCount = 0;
+            let lastUploadedBgId = null;
+            
+            for (const f of files) {
+                try {
+                    // Generate unique ID for this background
+                    const bgId = `bg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    const originalName = f.name.replace(/\.[^/.]+$/, ''); // Remove extension
+                    const ext = f.name.split('.').pop();
+                    const fn = `${bgId}.${ext}`;
+                    
+                    // Save the file
+                    await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'backgrounds'), fn), f);
+                    
+                    // Add to backgrounds array
+                    appState.ui.editorState.meta.backgrounds.push({
+                        id: bgId,
+                        name: originalName,
+                        fileName: fn
+                    });
+                    
+                    lastUploadedBgId = bgId;
+                    uploadedCount++;
+                    console.log(`✅ Uploaded background: ${originalName} (${fn})`);
+                } catch (err) {
+                    console.error(`❌ Error uploading background ${f.name}:`, err);
+                    alert(`Failed to upload background file: ${f.name}`);
                 }
-                
-                // Add to backgrounds array
-                appState.ui.editorState.meta.backgrounds.push({
-                    id: bgId,
-                    name: originalName,
-                    fileName: fn
-                });
-                
-                // If this is the first background, set it as default
-                if (appState.ui.editorState.meta.backgrounds.length === 1) {
-                    appState.ui.editorState.meta.defaultBackground = bgId;
-                    appState.ui.editorState.meta.backgroundId = bgId;
-                }
-                
+            }
+            
+            // If this is the first background(s), set the last one as global
+            if (isFirstBackground && lastUploadedBgId) {
+                appState.ui.editorState.meta.globalBackground = lastUploadedBgId;
+                console.log(`🌐 Set global background: ${lastUploadedBgId}`);
+            }
+            
+            if (uploadedCount > 0) {
                 appState.ui.editorIsDirty = true;
                 renderSchemaInspector();
                 
-                // Load the new background if it's now active
-                if (appState.ui.editorState.meta.backgroundId === bgId) {
-                    loadAndDisplayBackground(fn);
+                // Load the global background if set
+                const globalBgId = appState.ui.editorState.meta.globalBackground;
+                if (globalBgId) {
+                    const bg = appState.ui.editorState.meta.backgrounds.find(b => b.id === globalBgId);
+                    if (bg) {
+                        loadAndDisplayBackground(bg.fileName);
+                        console.log(`🖼️ Loaded global background: ${bg.name}`);
+                    }
                 }
-            } catch (err) {
-                console.error('Error uploading background:', err);
-                alert('Failed to upload background file');
+                
+                console.log(`✅ Successfully uploaded ${uploadedCount} of ${files.length} backgrounds`);
             }
         }
         // Reset the input so the same file can be selected again
