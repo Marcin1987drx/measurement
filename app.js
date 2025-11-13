@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateTheme = (isDark) => document.documentElement.classList.toggle('dark-mode', isDark);
 
-    const selectMP = (id) => {
+    const selectMP = async (id) => {
         appState.ui.selectedMPId = id;
         highlightSelection(id);
         
@@ -153,12 +153,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!appState.ui.isEditorOpen && appState.data.currentMap) {
             const mp = appState.data.currentMap.points.find(p => p.id === id);
             if (mp) {
-                // ✅ NEW: Load MP background (own or global)
+                // ✅ FIXED: Load MP background (own or global) synchronously
+                let bgFileName = null;
                 if (mp.backgroundId) {
                     const bg = appState.data.currentMap.meta.backgrounds.find(b => b.id === mp.backgroundId);
                     if (bg) {
                         console.log(`🔄 Switching to MP ${id}'s background: ${bg.name}`);
-                        loadAndDisplayBackground(bg.fileName);
+                        bgFileName = bg.fileName;
                     }
                 } else {
                     // MP uses global background
@@ -167,20 +168,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     );
                     if (globalBg) {
                         console.log(`🔄 Switching to global background for MP ${id}: ${globalBg.name}`);
-                        loadAndDisplayBackground(globalBg.fileName);
+                        bgFileName = globalBg.fileName;
                     }
+                }
+                
+                // Wait for background to load before applying zoom
+                if (bgFileName) {
+                    await loadAndDisplayBackgroundSync(bgFileName);
                 }
                 
                 // ✅ FIX: ALWAYS set zoom - either from mp.view OR reset to 1x
                 if (mp.view && mp.view.scale) {
                     console.log(`📐 Loading saved view for ${id}: scale=${mp.view.scale.toFixed(2)}x`);
-                    applyCanvasZoom(mp.view);
+                    applyCanvasZoom(mp.view, false); // No animation for precise positioning
                 } else {
                     console.log(`📐 No saved view for ${id}, resetting to 1x zoom`);
                     resetCanvasView(false, false); // Reset without animation, keep selection
                 }
                 
-                // Note: renderCanvas() is called by loadAndDisplayBackground's onload handler
+                // ✅ FIXED: Explicitly call renderCanvas() and fitLabelsToView() after zoom
+                renderCanvas();
+                requestAnimationFrame(() => {
+                    fitLabelsToView();
+                });
             }
         }
     };
@@ -709,6 +719,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    /**
+     * Load and display background synchronously (returns a Promise)
+     * This ensures background is fully loaded before zoom/render operations
+     */
+    const loadAndDisplayBackgroundSync = async (bgFilename) => {
+        console.log(`🔍 Attempting to load background synchronously: ${bgFilename}`);
+        dom.backgroundImg.src = '';
+        if (!bgFilename) {
+            console.warn('⚠️ No background filename provided');
+            return;
+        }
+        const bgHandle = appState.fileHandles.backgrounds[bgFilename];
+        if (!bgHandle) {
+            console.error(`❌ Background file handle not found for: ${bgFilename}`);
+            console.log('Available backgrounds:', Object.keys(appState.fileHandles.backgrounds));
+            return;
+        }
+        try {
+            const file = await bgHandle.getFile();
+            const url = URL.createObjectURL(file);
+            dom.backgroundImg.src = url;
+            dom.backgroundImg.style.display = 'block';
+            
+            // Wait for image to load before returning
+            await new Promise((resolve, reject) => {
+                dom.backgroundImg.onload = () => {
+                    console.log(`✅ Background image loaded synchronously: ${bgFilename}`);
+                    resolve();
+                };
+                dom.backgroundImg.onerror = () => {
+                    reject(new Error(`Failed to load background: ${bgFilename}`));
+                };
+            });
+        } catch (err) { 
+            console.error(`❌ Error loading background ${bgFilename}:`, err); 
+            throw err;
+        }
+    };
+
     // =========================================
     // [SECTION] UI UPDATES
     // =========================================
@@ -1137,6 +1186,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.ui.isZoomActive) {
             applyCanvasZoom(appState.ui.canvasZoom, false);
         }
+        
+        // ✅ FIXED: Always call fitLabelsToView after render to ensure correct positioning
+        requestAnimationFrame(() => {
+            fitLabelsToView();
+        });
     };
 
     const fitLabelsToView = () => {
@@ -1505,31 +1559,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 mp.id = newId; appState.ui.selectedMPId = newId; appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas();
             } else { e.target.value = mp.id; }
         });
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
             // First, handle card selection (unless clicking on interactive elements)
             if (!e.target.matches('input, button, select, textarea, .editor-icon-btn')) {
                 // Select this MP
-                selectMP(mp.id);
+                appState.ui.selectedMPId = mp.id;
+                highlightSelection(mp.id);
                 
-                // ✅ FIX: Load correct background
+                // ✅ FIXED: Load correct background synchronously
+                let bgFileName = null;
                 if (mp.backgroundId) {
                     const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === mp.backgroundId);
                     if (bg) {
-                        loadAndDisplayBackground(bg.fileName);
                         console.log(`🔍 Selected MP ${mp.id}, loading its background: ${bg.name}`);
+                        bgFileName = bg.fileName;
                     }
                 } else {
                     const globalBgId = appState.ui.editorState.meta.globalBackground;
                     if (globalBgId) {
                         const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === globalBgId);
                         if (bg) {
-                            loadAndDisplayBackground(bg.fileName);
                             console.log(`🔍 Selected MP ${mp.id}, loading global background: ${bg.name}`);
+                            bgFileName = bg.fileName;
                         }
                     }
                 }
                 
-                // ✅ NEW: Reset zoom based on MP's saved view
+                // Wait for background to load before applying zoom
+                if (bgFileName) {
+                    await loadAndDisplayBackgroundSync(bgFileName);
+                }
+                
+                // ✅ FIXED: Reset zoom based on MP's saved view
                 if (mp.view && mp.view.scale) {
                     console.log(`🔍 Applying saved view for ${mp.id} in editor`);
                     applyCanvasZoom(mp.view, false);
@@ -1538,8 +1599,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetCanvasView(false, false); // Reset without animation, keep selection
                 }
                 
-                // ✅ CRITICAL: Re-render canvas with new filters
+                // ✅ FIXED: Explicitly call renderCanvas() and fitLabelsToView() after zoom
                 renderCanvas();
+                requestAnimationFrame(() => {
+                    fitLabelsToView();
+                });
             }
             
             // Then handle button actions
