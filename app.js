@@ -176,8 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyCanvasZoom(mp.view);
                 }
                 
-                // ✅ CRITICAL: Re-render canvas with new MPs
-                renderCanvas();
+                // Note: renderCanvas() is called by loadAndDisplayBackground's onload handler
             }
         }
     };
@@ -299,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.ui.canvasZoom = { scale: 1, offsetX: 0, offsetY: 0 };
         appState.ui.isZoomActive = false;
         appState.ui.currentMPView = null;
+        appState.ui.selectedMPId = null;  // ✅ Clear selected MP
         
         // Reset to global background in measurement mode
         if (!appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
@@ -807,14 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!isFocusOnMP) {
                                 // User left measurement area - return to global background + zoom 1x
                                 console.log('👋 User left measurement area, resetting view');
-                                const globalBg = appState.data.currentMap.meta.backgrounds.find(
-                                    b => b.id === appState.data.currentMap.meta.globalBackground
-                                );
-                                if (globalBg) {
-                                    loadAndDisplayBackground(globalBg.fileName);
-                                }
                                 resetCanvasView();
-                                renderCanvas();
                             }
                             // If focus on another MP, do nothing - selectMP() will handle it
                         }, 50);
@@ -883,14 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!isFocusOnMP) {
                             // User left measurement area - return to global background + zoom 1x
                             console.log('👋 User left measurement area, resetting view');
-                            const globalBg = appState.data.currentMap.meta.backgrounds.find(
-                                b => b.id === appState.data.currentMap.meta.globalBackground
-                            );
-                            if (globalBg) {
-                                loadAndDisplayBackground(globalBg.fileName);
-                            }
                             resetCanvasView();
-                            renderCanvas();
                         }
                         // If focus on another MP, do nothing - selectMP() will handle it
                     }, 50);
@@ -2117,8 +2103,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ✅ NEW: Handle custom view (for zoom exports)
                 let cv, ctx, scale, ox, oy;
                 
-                if (view && view.scale) {
-                    // Create canvas with zoom view
+                if (view && view.scale && view.scale > 1) {
+                    // Create canvas with zoom view (only if scale > 1)
                     cv = document.createElement('canvas');
                     cv.width = 800;  // Standard output size
                     cv.height = 600;
