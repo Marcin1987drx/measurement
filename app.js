@@ -171,9 +171,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
-                // Apply zoom
-                if (mp.view) {
+                // ✅ FIX: ALWAYS set zoom - either from mp.view OR reset to 1x
+                if (mp.view && mp.view.scale) {
+                    console.log(`📐 Loading saved view for ${id}: scale=${mp.view.scale.toFixed(2)}x`);
                     applyCanvasZoom(mp.view);
+                } else {
+                    console.log(`📐 No saved view for ${id}, resetting to 1x zoom`);
+                    resetCanvasView(false, false); // Reset without animation, keep selection
                 }
                 
                 // Note: renderCanvas() is called by loadAndDisplayBackground's onload handler
@@ -294,14 +298,17 @@ document.addEventListener('DOMContentLoaded', () => {
         fitLabelsToView();
     };
 
-    const resetCanvasView = (animate = true) => {
+    const resetCanvasView = (animate = true, clearSelection = true) => {
         appState.ui.canvasZoom = { scale: 1, offsetX: 0, offsetY: 0 };
         appState.ui.isZoomActive = false;
         appState.ui.currentMPView = null;
-        appState.ui.selectedMPId = null;  // ✅ Clear selected MP
         
-        // Reset to global background in measurement mode
-        if (!appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
+        if (clearSelection) {
+            appState.ui.selectedMPId = null;  // ✅ Clear selected MP only if requested
+        }
+        
+        // Reset to global background in measurement mode (only if clearing selection)
+        if (clearSelection && !appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
             const meta = appState.data.currentMap.meta;
             if (meta.globalBackground && meta.backgrounds) {
                 const globalBg = meta.backgrounds.find(b => b.id === meta.globalBackground);
@@ -1520,6 +1527,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             console.log(`🔍 Selected MP ${mp.id}, loading global background: ${bg.name}`);
                         }
                     }
+                }
+                
+                // ✅ NEW: Reset zoom based on MP's saved view
+                if (mp.view && mp.view.scale) {
+                    console.log(`🔍 Applying saved view for ${mp.id} in editor`);
+                    applyCanvasZoom(mp.view, false);
+                } else {
+                    console.log(`🔍 Resetting view for ${mp.id} (no saved view)`);
+                    resetCanvasView(false, false); // Reset without animation, keep selection
                 }
                 
                 // ✅ CRITICAL: Re-render canvas with new filters
