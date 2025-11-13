@@ -606,14 +606,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (mapData.meta) {
                         let bgToLoad = null;
                         
-                        // New structure: use defaultBackground
-                        if (mapData.meta.defaultBackground && mapData.meta.backgrounds) {
+                        // NEW: Use globalBackground (current system)
+                        if (mapData.meta.globalBackground && mapData.meta.backgrounds) {
+                            const bg = mapData.meta.backgrounds.find(b => b.id === mapData.meta.globalBackground);
+                            if (bg) {
+                                bgToLoad = bg.fileName;
+                                console.log(`🖼️ Loading global background: ${bg.name}`);
+                            }
+                        }
+                        // FALLBACK: Use defaultBackground (migration compatibility)
+                        else if (mapData.meta.defaultBackground && mapData.meta.backgrounds) {
                             const bg = mapData.meta.backgrounds.find(b => b.id === mapData.meta.defaultBackground);
-                            if (bg) bgToLoad = bg.fileName;
+                            if (bg) {
+                                bgToLoad = bg.fileName;
+                                console.log(`🖼️ Loading default background (legacy): ${bg.name}`);
+                            }
                         }
                         // Legacy structure: use backgroundFile
                         else if (mapData.meta.backgroundFile) {
                             bgToLoad = mapData.meta.backgroundFile;
+                            console.log(`🖼️ Loading legacy background file: ${bgToLoad}`);
                         }
                         
                         if (bgToLoad) {
@@ -897,12 +909,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // SIMPLIFIED FILTERING LOGIC:
-        // - MPs without backgroundId: always show on current view
+        // - MPs without backgroundId: show ONLY when viewing global background
         // - MPs with backgroundId: show only when viewing that specific background
         const filteredPoints = points.filter(mp => {
             if (!mp.backgroundId) {
-                // MP without specific background - always show on current view
-                return true;
+                // MP without backgroundId - show ONLY when viewing global background
+                return viewingBgId === meta.globalBackground || viewingBgId === null;
             }
             // MP with specific background - show only when viewing that background
             return mp.backgroundId === viewingBgId;
@@ -1399,6 +1411,33 @@ document.addEventListener('DOMContentLoaded', () => {
             } else { e.target.value = mp.id; }
         });
         card.addEventListener('click', (e) => {
+            // First, handle card selection (unless clicking on interactive elements)
+            if (!e.target.matches('input, button, select, textarea, .editor-icon-btn')) {
+                // Select this MP
+                selectMP(mp.id);
+                
+                // Load its background if it has one
+                if (mp.backgroundId) {
+                    const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === mp.backgroundId);
+                    if (bg) {
+                        loadAndDisplayBackground(bg.fileName);
+                        console.log(`🔍 Selected MP ${mp.id}, loading background: ${bg.name}`);
+                    }
+                } else {
+                    // MP uses global background - load it
+                    const globalBgId = appState.ui.editorState.meta.globalBackground;
+                    if (globalBgId) {
+                        const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === globalBgId);
+                        if (bg) {
+                            loadAndDisplayBackground(bg.fileName);
+                            console.log(`🔍 Selected MP ${mp.id}, loading global background: ${bg.name}`);
+                        }
+                    }
+                }
+                renderCanvas();
+            }
+            
+            // Then handle button actions
             const act = e.target.dataset.action; if (!act) return;
             if (act === 'delete-mp') { if (confirm(`Delete ${mp.id}?`)) deleteMP(mp.id); }
             else if (act === 'add-arrow') { mp.arrows.push({x1: 400, y1: 300, x2: 500, y2: 300, style: {color: '#ff9500', width: 2, head: 'arrow'}}); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
