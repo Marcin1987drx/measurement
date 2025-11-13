@@ -152,8 +152,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply saved view if in normal mode (not editor) and MP has a view
         if (!appState.ui.isEditorOpen && appState.data.currentMap) {
             const mp = appState.data.currentMap.points.find(p => p.id === id);
-            if (mp && mp.view) {
-                applyCanvasZoom(mp.view);
+            if (mp) {
+                // Load MP-specific background if it has one
+                if (mp.backgroundId && appState.data.currentMap.meta && appState.data.currentMap.meta.backgrounds) {
+                    const bg = appState.data.currentMap.meta.backgrounds.find(b => b.id === mp.backgroundId);
+                    if (bg && bg.fileName) {
+                        console.log(`🔄 Switching to MP ${id}'s background: ${bg.name}`);
+                        loadAndDisplayBackground(bg.fileName);
+                    }
+                }
+                
+                // Apply saved view
+                if (mp.view) {
+                    applyCanvasZoom(mp.view);
+                }
             }
         }
     };
@@ -275,6 +287,18 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.ui.canvasZoom = { scale: 1, offsetX: 0, offsetY: 0 };
         appState.ui.isZoomActive = false;
         appState.ui.currentMPView = null;
+        
+        // Reset to global background in measurement mode
+        if (!appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
+            const meta = appState.data.currentMap.meta;
+            if (meta.globalBackground && meta.backgrounds) {
+                const globalBg = meta.backgrounds.find(b => b.id === meta.globalBackground);
+                if (globalBg && globalBg.fileName) {
+                    console.log(`🔄 Resetting to global background: ${globalBg.name}`);
+                    loadAndDisplayBackground(globalBg.fileName);
+                }
+            }
+        }
         
         const transitionStyle = animate ? '' : 'none';
         dom.backgroundImg.style.transition = transitionStyle;
@@ -900,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Otherwise, use the global background
         let viewingBgId = meta.globalBackground || null;
         
-        if (isEditor && appState.ui.selectedMPId) {
+        if (appState.ui.selectedMPId) {
             const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
             if (selectedMP && selectedMP.backgroundId) {
                 viewingBgId = selectedMP.backgroundId;
