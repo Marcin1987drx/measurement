@@ -883,25 +883,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Filter points by background
-        // CORRECT LOGIC per requirements:
-        // 1. When viewing GLOBAL background → show ONLY MPs WITHOUT specific backgroundId
-        // 2. When viewing SPECIFIC background → show MPs WITH that backgroundId + MPs WITHOUT backgroundId
+        // SIMPLIFIED FILTERING LOGIC:
+        // - MPs without backgroundId: always show on current view
+        // - MPs with backgroundId: show only when viewing that specific background
         const filteredPoints = points.filter(mp => {
             if (!mp.backgroundId) {
-                // MP has no specific background - ALWAYS visible (uses whatever background is active)
+                // MP without specific background - always show on current view
                 return true;
-            } else if (viewingBgId === meta.globalBackground) {
-                // Viewing global background - HIDE MPs with specific backgrounds
-                const visible = false;
-                console.log(`❌ MP ${mp.id}: Has specific background ${mp.backgroundId}, hidden when viewing global`);
-                return visible;
-            } else {
-                // Viewing a specific background - show only if it matches
-                const visible = mp.backgroundId === viewingBgId;
-                console.log(`${visible ? '✅' : '❌'} MP ${mp.id}: Background ${mp.backgroundId} ${visible ? 'matches' : 'does not match'} viewed ${viewingBgId}`);
-                return visible;
             }
+            // MP with specific background - show only when viewing that background
+            return mp.backgroundId === viewingBgId;
         });
         
         console.log(`📊 Filtered ${filteredPoints.length}/${points.length} MPs for background ${viewingBgId || 'none'}`);
@@ -1450,6 +1441,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             console.log(`🖼️ MP ${mp.id} set to use global, but no global background set`);
                         }
                     }
+                    // IMPORTANT: Refresh canvas to show filtered points for new background
+                    renderCanvas();
                 }
                 if (path[path.length - 1].match(/nominal|min|max|width/)) val = parseFloat(val.replace(',', '.')) || val;
                 let target = mp;
