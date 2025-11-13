@@ -628,17 +628,30 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const loadAndDisplayBackground = async (bgFilename) => {
+        console.log(`🔍 Attempting to load background: ${bgFilename}`);
         dom.backgroundImg.src = '';
-        if (!bgFilename) return;
+        if (!bgFilename) {
+            console.warn('⚠️ No background filename provided');
+            return;
+        }
         const bgHandle = appState.fileHandles.backgrounds[bgFilename];
-        if (!bgHandle) return;
+        if (!bgHandle) {
+            console.error(`❌ Background file handle not found for: ${bgFilename}`);
+            console.log('Available backgrounds:', Object.keys(appState.fileHandles.backgrounds));
+            return;
+        }
         try {
             const file = await bgHandle.getFile();
             const url = URL.createObjectURL(file);
             dom.backgroundImg.src = url;
             dom.backgroundImg.style.display = 'block';
-            dom.backgroundImg.onload = renderCanvas;
-        } catch (err) { console.error(`Error loading background ${bgFilename}`, err); }
+            dom.backgroundImg.onload = () => {
+                console.log(`✅ Background image loaded and displayed: ${bgFilename}`);
+                renderCanvas();
+            };
+        } catch (err) { 
+            console.error(`❌ Error loading background ${bgFilename}:`, err); 
+        }
     };
 
     // =========================================
@@ -3149,8 +3162,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const ext = f.name.split('.').pop();
                     const fn = `${bgId}.${ext}`;
                     
-                    // Save the file
-                    await writeFile(await getOrCreateFile(await getOrCreateDir(appState.projectRootHandle, 'backgrounds'), fn), f);
+                    // Save the file and get the file handle
+                    const backgroundsDir = await getOrCreateDir(appState.projectRootHandle, 'backgrounds');
+                    const fileHandle = await getOrCreateFile(backgroundsDir, fn);
+                    await writeFile(fileHandle, f);
+                    
+                    // ⭐ Update appState.fileHandles.backgrounds with new handle
+                    appState.fileHandles.backgrounds[fn] = fileHandle;
+                    console.log(`✅ Added file handle for: ${fn}`);
                     
                     // Add to backgrounds array
                     appState.ui.editorState.meta.backgrounds.push({
