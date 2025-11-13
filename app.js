@@ -153,19 +153,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!appState.ui.isEditorOpen && appState.data.currentMap) {
             const mp = appState.data.currentMap.points.find(p => p.id === id);
             if (mp) {
-                // Load MP-specific background if it has one
-                if (mp.backgroundId && appState.data.currentMap.meta && appState.data.currentMap.meta.backgrounds) {
+                // ✅ NEW: Load MP background (own or global)
+                if (mp.backgroundId) {
                     const bg = appState.data.currentMap.meta.backgrounds.find(b => b.id === mp.backgroundId);
-                    if (bg && bg.fileName) {
+                    if (bg) {
                         console.log(`🔄 Switching to MP ${id}'s background: ${bg.name}`);
                         loadAndDisplayBackground(bg.fileName);
                     }
+                } else {
+                    // MP uses global background
+                    const globalBg = appState.data.currentMap.meta.backgrounds.find(
+                        b => b.id === appState.data.currentMap.meta.globalBackground
+                    );
+                    if (globalBg) {
+                        console.log(`🔄 Switching to global background for MP ${id}: ${globalBg.name}`);
+                        loadAndDisplayBackground(globalBg.fileName);
+                    }
                 }
                 
-                // Apply saved view
+                // Apply zoom
                 if (mp.view) {
                     applyCanvasZoom(mp.view);
                 }
+                
+                // Note: renderCanvas() is called by loadAndDisplayBackground's onload handler
             }
         }
     };
@@ -287,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.ui.canvasZoom = { scale: 1, offsetX: 0, offsetY: 0 };
         appState.ui.isZoomActive = false;
         appState.ui.currentMPView = null;
+        appState.ui.selectedMPId = null;  // ✅ Clear selected MP
         
         // Reset to global background in measurement mode
         if (!appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
@@ -781,22 +793,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                         if (label) label.classList.remove('is-blinking');
                         
-                        // ✅ FIX: Smart reset - only reset if user truly left measurement area
+                        // ✅ SMART RESET
                         setTimeout(() => {
-                            const activeEl = document.activeElement;
-                            const isMPInput = activeEl && (
-                                activeEl.closest('.mp-row') || 
-                                activeEl.matches('.mp-value input') ||
-                                activeEl.matches('input[data-col-index]')
+                            const focusedElement = document.activeElement;
+                            
+                            // Check if focus moved to another MP input
+                            const isFocusOnMP = focusedElement && (
+                                focusedElement.classList.contains('mp-sub-input') ||
+                                focusedElement.closest('.mp-row') ||
+                                focusedElement.closest('.mp-table-inputs')
                             );
                             
-                            // Only reset if focus didn't move to another MP input
-                            if (!isMPInput) {
+                            if (!isFocusOnMP) {
+                                // User left measurement area - return to global background + zoom 1x
                                 console.log('👋 User left measurement area, resetting view');
                                 resetCanvasView();
-                            } else {
-                                console.log('🔄 User switched to another MP, keeping view active');
                             }
+                            // If focus on another MP, do nothing - selectMP() will handle it
                         }, 50);
                     });
                    
@@ -849,22 +862,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                     if (label) label.classList.remove('is-blinking');
                     
-                    // ✅ FIX: Smart reset - only reset if user truly left measurement area
+                    // ✅ SMART RESET
                     setTimeout(() => {
-                        const activeEl = document.activeElement;
-                        const isMPInput = activeEl && (
-                            activeEl.closest('.mp-row') || 
-                            activeEl.matches('.mp-value input') ||
-                            activeEl.matches('input[data-col-index]')
+                        const focusedElement = document.activeElement;
+                        
+                        // Check if focus moved to another MP input
+                        const isFocusOnMP = focusedElement && (
+                            focusedElement.classList.contains('mp-sub-input') ||
+                            focusedElement.closest('.mp-row') ||
+                            focusedElement.closest('.mp-table-inputs')
                         );
                         
-                        // Only reset if focus didn't move to another MP input
-                        if (!isMPInput) {
+                        if (!isFocusOnMP) {
+                            // User left measurement area - return to global background + zoom 1x
                             console.log('👋 User left measurement area, resetting view');
                             resetCanvasView();
-                        } else {
-                            console.log('🔄 User switched to another MP, keeping view active');
                         }
+                        // If focus on another MP, do nothing - selectMP() will handle it
                     }, 50);
                 });
             }
@@ -953,29 +967,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const points = currentData.points || [];
         const meta = currentData.meta || {};
 
-        // Determine which background is being viewed
-        // If a specific MP is selected and has its own background, use that
-        // Otherwise, use the global background
+        // ✅ NEW LOGIC: Determine which background we're viewing
         let viewingBgId = meta.globalBackground || null;
         
-        if (appState.ui.selectedMPId) {
+        if (!isEditor && appState.ui.selectedMPId) {
             const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
-            if (selectedMP && selectedMP.backgroundId) {
-                viewingBgId = selectedMP.backgroundId;
-                console.log(`🔍 Viewing MP ${selectedMP.id}'s specific background: ${viewingBgId}`);
+            if (selectedMP) {
+                viewingBgId = selectedMP.backgroundId || meta.globalBackground;
             }
         }
         
-        // SIMPLIFIED FILTERING LOGIC:
-        // - MPs without backgroundId: show ONLY when viewing global background
-        // - MPs with backgroundId: show only when viewing that specific background
+        // ✅ SIMPLIFIED FILTERING:
         const filteredPoints = points.filter(mp => {
-            if (!mp.backgroundId) {
-                // MP without backgroundId - show ONLY when viewing global background
-                return viewingBgId === meta.globalBackground || viewingBgId === null;
+            // If viewing specific background, show only MPs with that backgroundId
+            if (viewingBgId && viewingBgId !== meta.globalBackground) {
+                return mp.backgroundId === viewingBgId;
             }
-            // MP with specific background - show only when viewing that background
-            return mp.backgroundId === viewingBgId;
+            
+            // If viewing global background, show only MPs without backgroundId
+            return !mp.backgroundId;
         });
         
         console.log(`📊 Filtered ${filteredPoints.length}/${points.length} MPs for background ${viewingBgId || 'none'}`);
@@ -2011,15 +2021,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            await exportPNG({ fromSave: true, saveToFile: true, showAlertOnSuccess: false });
-            
-            // Generate zoom images from overview
-            console.log('✅ Overview saved, generating zooms...');
+            // ✅ CHANGE: Use new function instead of old one
+            console.log('📸 Generating visualizations...');
             const qrCode = dom.qrCodeInput.value.trim();
             const schemaName = appState.data.currentMap?.fileName;
             if (qrCode && schemaName) {
-                await generateZoomImages(qrCode, schemaName);
+                await generateAllVisualizationImages(qrCode, schemaName);
             }
+            console.log('✅ All visualizations saved');
             
             dom.saveConfirmationOverlay.classList.add('visible');
             setTimeout(() => {
@@ -2037,59 +2046,109 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
    
-    const exportPNG = async ({ fromSave = false, recordData = null, mapData = null, saveToFile = false, showAlertOnSuccess = true } = {}) => {
+    const exportPNG = async ({ 
+        fromSave = false, 
+        recordData = null, 
+        mapData = null, 
+        saveToFile = false, 
+        showAlertOnSuccess = true,
+        backgroundId = null,  // ✅ NEW parameter for overview per background
+        visibleMPs = null,    // ✅ NEW parameter for filtering MPs
+        fileName = null,      // ✅ NEW parameter for custom filename
+        view = null           // ✅ NEW parameter for custom view (zoom)
+    } = {}) => {
         return new Promise(async (resolve, reject) => {
             const cMap = mapData || appState.data.currentMap;
             
-            // ✅ FIX: Support new multi-background system (globalBackground + backgrounds[])
-            let bgFileName = null;
+            // ✅ NEW LOGIC: Determine background to use
+            let backgroundFileName = null;
             
-            // Check new system first: globalBackground + backgrounds[]
-            if (cMap?.meta?.globalBackground && cMap?.meta?.backgrounds) {
-                const globalBg = cMap.meta.backgrounds.find(b => b.id === cMap.meta.globalBackground);
-                if (globalBg && globalBg.fileName) {
-                    bgFileName = globalBg.fileName;
-                    console.log(`📤 Export using global background: ${globalBg.name} (${bgFileName})`);
+            if (backgroundId) {
+                // Explicitly provided backgroundId (for overview per background)
+                const bg = cMap.meta.backgrounds.find(b => b.id === backgroundId);
+                if (bg) {
+                    backgroundFileName = bg.fileName;
+                    console.log(`📤 Export using specified background: ${bg.name} (${backgroundFileName})`);
+                }
+            } else if (cMap?.meta?.globalBackground && cMap?.meta?.backgrounds) {
+                // New system: globalBackground
+                const bg = cMap.meta.backgrounds.find(b => b.id === cMap.meta.globalBackground);
+                if (bg) {
+                    backgroundFileName = bg.fileName;
+                    console.log(`📤 Export using global background: ${bg.name} (${backgroundFileName})`);
                 }
             }
             
-            // Fallback to old system for backward compatibility
-            if (!bgFileName && cMap?.meta?.backgroundFile) {
-                bgFileName = cMap.meta.backgroundFile;
-                console.log(`📤 Export using legacy backgroundFile: ${bgFileName}`);
+            // ✅ Fallback for old schemas
+            if (!backgroundFileName && cMap?.meta?.backgroundFile) {
+                backgroundFileName = cMap.meta.backgroundFile;
+                console.log(`📤 Export using legacy backgroundFile: ${backgroundFileName}`);
             }
             
-            // Validate we have a background
-            if (!bgFileName) {
+            if (!backgroundFileName) {
                 console.error('❌ No background configured for export');
                 return reject("Schema has no background configured");
             }
             
-            const bgH = appState.fileHandles.backgrounds[bgFileName];
+            const bgH = appState.fileHandles.backgrounds[backgroundFileName];
             if (!bgH) {
-                console.error(`❌ Background file handle not found: ${bgFileName}`);
-                return reject("Background file not found");
+                console.error(`❌ Background file handle not found: ${backgroundFileName}`);
+                return reject(`Background file not found: ${backgroundFileName}`);
             }
             const img = new Image();
             const bgUrl = URL.createObjectURL(await bgH.getFile());
             img.onload = () => {
                 const { naturalWidth: nw, naturalHeight: nh } = img;
-                const scale = Math.min(nw / VIEWBOX_WIDTH, nh / VIEWBOX_HEIGHT);
-                const ox = (nw - VIEWBOX_WIDTH * scale) / 2;
-                const oy = (nh - VIEWBOX_HEIGHT * scale) / 2;
-                const cv = document.createElement('canvas');
-                cv.width = nw;
-                cv.height = nh;
-                const ctx = cv.getContext('2d');
-                if (dom.visualizationBgToggle.checked) {
-                    ctx.fillStyle = dom.visualizationBgColor.value;
-                    ctx.fillRect(0, 0, nw, nh);
+                
+                // ✅ NEW: Handle custom view (for zoom exports)
+                let cv, ctx, scale, ox, oy;
+                
+                if (view && view.scale && view.scale > 1) {
+                    // Create canvas with zoom view (only if scale > 1)
+                    cv = document.createElement('canvas');
+                    cv.width = 800;  // Standard output size
+                    cv.height = 600;
+                    ctx = cv.getContext('2d');
+                    
+                    // Calculate crop region based on view
+                    const centerX = nw / 2 + (view.offsetX || 0);
+                    const centerY = nh / 2 + (view.offsetY || 0);
+                    const cropW = nw / view.scale;
+                    const cropH = nh / view.scale;
+                    const cropX = centerX - cropW / 2;
+                    const cropY = centerY - cropH / 2;
+                    
+                    // Draw cropped background
+                    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 800, 600);
+                    
+                    // Adjust scale and offset for rendering MPs in cropped view
+                    scale = Math.min(nw / VIEWBOX_WIDTH, nh / VIEWBOX_HEIGHT) * view.scale * (800 / nw);
+                    ox = ((nw - VIEWBOX_WIDTH * Math.min(nw / VIEWBOX_WIDTH, nh / VIEWBOX_HEIGHT)) / 2 - cropX) * (800 / cropW);
+                    oy = ((nh - VIEWBOX_HEIGHT * Math.min(nw / VIEWBOX_WIDTH, nh / VIEWBOX_HEIGHT)) / 2 - cropY) * (600 / cropH);
+                } else {
+                    // Standard full view
+                    scale = Math.min(nw / VIEWBOX_WIDTH, nh / VIEWBOX_HEIGHT);
+                    ox = (nw - VIEWBOX_WIDTH * scale) / 2;
+                    oy = (nh - VIEWBOX_HEIGHT * scale) / 2;
+                    cv = document.createElement('canvas');
+                    cv.width = nw;
+                    cv.height = nh;
+                    ctx = cv.getContext('2d');
+                    if (dom.visualizationBgToggle.checked) {
+                        ctx.fillStyle = dom.visualizationBgColor.value;
+                        ctx.fillRect(0, 0, nw, nh);
+                    }
+                    ctx.drawImage(img, 0, 0, nw, nh);
                 }
-                ctx.drawImage(img, 0, 0, nw, nh);
+                
                 URL.revokeObjectURL(bgUrl);
                 const cRec = recordData;
                 const getVal = (mpId, colName) => cRec ? (colName ? cRec[`${mpId}_${colName}_Value`] : cRec[`${mpId}_Value`]) : (colName ? document.querySelector(`.mp-row[data-mp-id="${mpId}"] input[data-col-index="${colName}"]`)?.value : document.querySelector(`.mp-row[data-mp-id="${mpId}"] input`)?.value);
-                cMap.points.forEach(mp => {
+                
+                // ✅ NEW: Use visibleMPs if provided (for overview per background)
+                const pointsToRender = visibleMPs || cMap.points;
+                
+                pointsToRender.forEach(mp => {
                     (mp.arrows||[{x1:mp.x1,y1:mp.y1,x2:mp.x2,y2:mp.y2,style:mp.style}]).forEach(a => {
                         if(!a.x1) return;
                         const x1=a.x1*scale+ox, y1=a.y1*scale+oy, x2=a.x2*scale+ox, y2=a.y2*scale+oy, lw=(a.style?.width||2)*scale, col=a.style?.color||'#007aff';
@@ -2218,7 +2277,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(cMap.meta.showQR&&qr) drawMeta(`QR: ${qr}`,cMap.meta.qrLabelPos);
                 if(cMap.meta.showDate) drawMeta(dt,cMap.meta.dateLabelPos);
                 cv.toBlob(async (b) => {
-                    const fn = `${qr||'viz'}.png`;
+                    // ✅ NEW: Use custom fileName if provided
+                    const fn = fileName || `${qr||'viz'}.png`;
                     if(saveToFile) {
                         try {
                             await writeFile(await getOrCreateFile(await getOrCreateDir(await getOrCreateDir(appState.projectRootHandle,'exports'),'visualizations'),fn),b);
@@ -2243,7 +2303,94 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // AUTO-GENERATE ZOOM IMAGES FROM OVERVIEW + SCHEMA VIEW COORDINATES
+    // GENERATE ALL VISUALIZATION IMAGES (PER-BACKGROUND OVERVIEWS + ZOOMS)
+    // ═════════════════════════════════════════════════════════════════════════════
+    
+    const generateAllVisualizationImages = async (qrCode, schemaName) => {
+        console.log(`🎨 Generating all visualization images for QR: ${qrCode}`);
+        
+        try {
+            const mapData = appState.data.currentMap;
+            if (!mapData) throw new Error("No map data");
+            
+            // 1. Collect unique backgrounds
+            const uniqueBackgrounds = new Set();
+            
+            // Add global background
+            if (mapData.meta.globalBackground) {
+                uniqueBackgrounds.add(mapData.meta.globalBackground);
+            }
+            
+            // Add MP-specific backgrounds
+            mapData.points.forEach(mp => {
+                if (mp.backgroundId) {
+                    uniqueBackgrounds.add(mp.backgroundId);
+                }
+            });
+            
+            console.log(`📊 Found ${uniqueBackgrounds.size} unique backgrounds`);
+            
+            // 2. Generate overview for each background
+            for (const bgId of uniqueBackgrounds) {
+                const bg = mapData.meta.backgrounds.find(b => b.id === bgId);
+                if (!bg) continue;
+                
+                // Filter MPs for this background
+                const mpsForThisBg = mapData.points.filter(mp => {
+                    if (bgId === mapData.meta.globalBackground) {
+                        return !mp.backgroundId;
+                    } else {
+                        return mp.backgroundId === bgId;
+                    }
+                });
+                
+                console.log(`🖼️ Generating overview for ${bg.name}: ${mpsForThisBg.length} MPs`);
+                
+                // Export overview (zoom 1x, all MPs for this background)
+                await exportPNG({
+                    recordData: appState.data.db[appState.data.db.length - 1],
+                    mapData: mapData,
+                    saveToFile: true,
+                    showAlertOnSuccess: false,
+                    backgroundId: bgId,
+                    visibleMPs: mpsForThisBg,
+                    fileName: `${qrCode}_overview_${bg.name.replace(/\s/g, '_')}.png`,
+                    view: { scale: 1, offsetX: 0, offsetY: 0 }
+                });
+            }
+            
+            // 3. Generate zoom for each MP with saved view
+            for (const mp of mapData.points) {
+                if (!mp.view || !mp.view.scale) continue; // Skip MPs without saved view
+                
+                const bgId = mp.backgroundId || mapData.meta.globalBackground;
+                const bg = mapData.meta.backgrounds.find(b => b.id === bgId);
+                if (!bg) continue;
+                
+                console.log(`🔍 Generating zoom for ${mp.id} on ${bg.name}`);
+                
+                await exportPNG({
+                    recordData: appState.data.db[appState.data.db.length - 1],
+                    mapData: mapData,
+                    saveToFile: true,
+                    showAlertOnSuccess: false,
+                    backgroundId: bgId,
+                    visibleMPs: [mp],
+                    fileName: `${qrCode}_${mp.id}.png`,
+                    view: mp.view
+                });
+            }
+            
+            console.log(`✅ All visualization images generated`);
+            
+        } catch (error) {
+            console.error('❌ Error generating visualization images:', error);
+            throw error;
+        }
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // AUTO-GENERATE ZOOM IMAGES FROM OVERVIEW + SCHEMA VIEW COORDINATES (OLD)
     // ═════════════════════════════════════════════════════════════════════════════
 
     async function generateZoomImages(qrCode, schemaName) {
