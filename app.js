@@ -780,7 +780,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     input.addEventListener('blur', () => {
                         const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                         if (label) label.classList.remove('is-blinking');
-                        resetCanvasView(); // Reset view on blur
+                        
+                        // ✅ FIX: Smart reset - only reset if user truly left measurement area
+                        setTimeout(() => {
+                            const activeEl = document.activeElement;
+                            const isMPInput = activeEl && (
+                                activeEl.closest('.mp-row') || 
+                                activeEl.matches('.mp-value input') ||
+                                activeEl.matches('input[data-col-index]')
+                            );
+                            
+                            // Only reset if focus didn't move to another MP input
+                            if (!isMPInput) {
+                                console.log('👋 User left measurement area, resetting view');
+                                resetCanvasView();
+                            } else {
+                                console.log('🔄 User switched to another MP, keeping view active');
+                            }
+                        }, 50);
                     });
                    
                     if (index === 0) {
@@ -831,7 +848,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 input.addEventListener('blur', () => {
                     const label = dom.labelsContainer.querySelector(`.mp-label[data-mp-id="${mp.id}"]`);
                     if (label) label.classList.remove('is-blinking');
-                    resetCanvasView(); // Reset view on blur
+                    
+                    // ✅ FIX: Smart reset - only reset if user truly left measurement area
+                    setTimeout(() => {
+                        const activeEl = document.activeElement;
+                        const isMPInput = activeEl && (
+                            activeEl.closest('.mp-row') || 
+                            activeEl.matches('.mp-value input') ||
+                            activeEl.matches('input[data-col-index]')
+                        );
+                        
+                        // Only reset if focus didn't move to another MP input
+                        if (!isMPInput) {
+                            console.log('👋 User left measurement area, resetting view');
+                            resetCanvasView();
+                        } else {
+                            console.log('🔄 User switched to another MP, keeping view active');
+                        }
+                    }, 50);
                 });
             }
             dom.mpList.appendChild(row);
@@ -1966,6 +2000,17 @@ document.addEventListener('DOMContentLoaded', () => {
             await saveProjectToLocalStorage(); // Update localStorage with latest data
             console.log('✅ localStorage updated - new measurement visible in Report Studio');
             
+            // ✅ FIX: Validate schema has background before export
+            const hasGlobalBg = appState.data.currentMap.meta?.globalBackground && 
+                               appState.data.currentMap.meta?.backgrounds?.length > 0;
+            const hasLegacyBg = appState.data.currentMap.meta?.backgroundFile;
+            
+            if (!hasGlobalBg && !hasLegacyBg) {
+                alert("Schemat nie ma skonfigurowanego tła. Proszę edytować schemat i dodać obraz tła.");
+                console.error('❌ Cannot export: Schema has no background configured');
+                return;
+            }
+            
             await exportPNG({ fromSave: true, saveToFile: true, showAlertOnSuccess: false });
             
             // Generate zoom images from overview
@@ -1995,9 +2040,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportPNG = async ({ fromSave = false, recordData = null, mapData = null, saveToFile = false, showAlertOnSuccess = true } = {}) => {
         return new Promise(async (resolve, reject) => {
             const cMap = mapData || appState.data.currentMap;
-            if (!cMap?.meta?.backgroundFile) return reject("No map or background");
-            const bgH = appState.fileHandles.backgrounds[cMap.meta.backgroundFile];
-            if (!bgH) return reject("No bg handle");
+            
+            // ✅ FIX: Support new multi-background system (globalBackground + backgrounds[])
+            let bgFileName = null;
+            
+            // Check new system first: globalBackground + backgrounds[]
+            if (cMap?.meta?.globalBackground && cMap?.meta?.backgrounds) {
+                const globalBg = cMap.meta.backgrounds.find(b => b.id === cMap.meta.globalBackground);
+                if (globalBg && globalBg.fileName) {
+                    bgFileName = globalBg.fileName;
+                    console.log(`📤 Export using global background: ${globalBg.name} (${bgFileName})`);
+                }
+            }
+            
+            // Fallback to old system for backward compatibility
+            if (!bgFileName && cMap?.meta?.backgroundFile) {
+                bgFileName = cMap.meta.backgroundFile;
+                console.log(`📤 Export using legacy backgroundFile: ${bgFileName}`);
+            }
+            
+            // Validate we have a background
+            if (!bgFileName) {
+                console.error('❌ No background configured for export');
+                return reject("Schema has no background configured");
+            }
+            
+            const bgH = appState.fileHandles.backgrounds[bgFileName];
+            if (!bgH) {
+                console.error(`❌ Background file handle not found: ${bgFileName}`);
+                return reject("Background file not found");
+            }
             const img = new Image();
             const bgUrl = URL.createObjectURL(await bgH.getFile());
             img.onload = () => {
