@@ -967,28 +967,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const points = currentData.points || [];
         const meta = currentData.meta || {};
 
-        // ✅ NEW LOGIC: Determine which background we're viewing
+        // ✅ CORRECTED: Determine which background we're viewing
         let viewingBgId = meta.globalBackground || null;
         
+        // IN EDITOR: If selected MP has its own background, show that background
+        if (isEditor && appState.ui.selectedMPId) {
+            const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
+            if (selectedMP && selectedMP.backgroundId) {
+                viewingBgId = selectedMP.backgroundId;
+                console.log(`🎨 EDITOR: Viewing MP ${selectedMP.id}'s background: ${viewingBgId}`);
+            } else if (selectedMP) {
+                console.log(`🎨 EDITOR: Viewing global background for MP ${selectedMP.id}`);
+            }
+        }
+        
+        // IN MEASUREMENT MODE: Similar logic
         if (!isEditor && appState.ui.selectedMPId) {
             const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
             if (selectedMP) {
                 viewingBgId = selectedMP.backgroundId || meta.globalBackground;
+                console.log(`📐 MEASUREMENT: Viewing background: ${viewingBgId}`);
             }
         }
         
-        // ✅ SIMPLIFIED FILTERING:
+        // ✅ CRITICAL FIX: CORRECTED FILTERING LOGIC!
         const filteredPoints = points.filter(mp => {
-            // If viewing specific background, show only MPs with that backgroundId
-            if (viewingBgId && viewingBgId !== meta.globalBackground) {
-                return mp.backgroundId === viewingBgId;
+            // If viewing GLOBAL background
+            if (viewingBgId === meta.globalBackground || viewingBgId === null) {
+                // Show ONLY MPs that DON'T have their own background
+                const shouldShow = !mp.backgroundId || mp.backgroundId === null;
+                console.log(`  - MP ${mp.id}: backgroundId=${mp.backgroundId}, shouldShow=${shouldShow} (GLOBAL VIEW)`);
+                return shouldShow;
             }
             
-            // If viewing global background, show only MPs without backgroundId
-            return !mp.backgroundId;
+            // If viewing SPECIFIC background
+            // Show ONLY MPs that HAVE this EXACT background
+            const shouldShow = mp.backgroundId === viewingBgId;
+            console.log(`  - MP ${mp.id}: backgroundId=${mp.backgroundId}, viewing=${viewingBgId}, shouldShow=${shouldShow} (SPECIFIC VIEW)`);
+            return shouldShow;
         });
         
-        console.log(`📊 Filtered ${filteredPoints.length}/${points.length} MPs for background ${viewingBgId || 'none'}`);
+        console.log(`📊 Filtered ${filteredPoints.length}/${points.length} MPs for background ${viewingBgId || 'global'}`);
+        console.log(`   Showing MPs: ${filteredPoints.map(p => p.id).join(', ')}`);
 
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
@@ -1484,15 +1504,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Select this MP
                 selectMP(mp.id);
                 
-                // Load its background if it has one
+                // ✅ FIX: Load correct background
                 if (mp.backgroundId) {
                     const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === mp.backgroundId);
                     if (bg) {
                         loadAndDisplayBackground(bg.fileName);
-                        console.log(`🔍 Selected MP ${mp.id}, loading background: ${bg.name}`);
+                        console.log(`🔍 Selected MP ${mp.id}, loading its background: ${bg.name}`);
                     }
                 } else {
-                    // MP uses global background - load it
                     const globalBgId = appState.ui.editorState.meta.globalBackground;
                     if (globalBgId) {
                         const bg = (appState.ui.editorState.meta.backgrounds || []).find(b => b.id === globalBgId);
@@ -1502,6 +1521,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
+                
+                // ✅ CRITICAL: Re-render canvas with new filters
                 renderCanvas();
             }
             
