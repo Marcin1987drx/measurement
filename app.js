@@ -54,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
             labelUpdateScheduled: false,
             dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
             dbDraggedColumnIndex: -1,
-            formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null }
+            formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null },
+            currentBackgroundUrl: null  // Track current background blob URL for cleanup
         }
     };
 
@@ -681,10 +682,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.ui.logoImage = img;
                 dom.headerLogo.src = url;
                 dom.headerLogo.style.display = 'block';
+                // Revoke the blob URL after the image has loaded to prevent memory leaks
+                URL.revokeObjectURL(url);
             };
             img.onerror = () => {
                 appState.ui.logoImage = null;
                 dom.headerLogo.style.display = 'none';
+                // Revoke the blob URL even on error to prevent memory leaks
+                URL.revokeObjectURL(url);
             };
             img.src = url;
         } catch (err) {
@@ -779,8 +784,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
+            // Revoke the previous background URL to prevent memory leaks
+            if (appState.ui.currentBackgroundUrl) {
+                URL.revokeObjectURL(appState.ui.currentBackgroundUrl);
+                appState.ui.currentBackgroundUrl = null;
+            }
+            
             const file = await bgHandle.getFile();
             const url = URL.createObjectURL(file);
+            appState.ui.currentBackgroundUrl = url;
             dom.backgroundImg.src = url;
             dom.backgroundImg.style.display = 'block';
             
@@ -1275,36 +1287,57 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const fitLabelsToView = () => {
-        // Use offsetWidth/offsetHeight instead of getBoundingClientRect()
-        // These return the BASE size before CSS transform, which is what we need
-        // because viewBox coordinates (1000x700) are relative to the base container size
-        const baseWidth = dom.labelsContainer.offsetWidth;
-        const baseHeight = dom.labelsContainer.offsetHeight;
-        if (baseWidth === 0 || baseHeight === 0) return;
-        
         const isEditor = appState.ui.isEditorOpen;
         const currentData = isEditor ? appState.ui.editorState : appState.data.currentMap;
         if (!currentData) return;
        
-        // Calculate scale based on BASE size (before CSS transform)
-        // The CSS transform on the container will handle the zoom/pan
-        const scaleX = baseWidth / VIEWBOX_WIDTH;
-        const scaleY = baseHeight / VIEWBOX_HEIGHT;
+        // ✅ FIX: Calculate the actual rendered size and position of the SVG viewBox
+        // accounting for preserveAspectRatio="xMidYMid meet"
+        const containerWidth = dom.labelsContainer.offsetWidth;
+        const containerHeight = dom.labelsContainer.offsetHeight;
+        if (containerWidth === 0 || containerHeight === 0) return;
+        
+        // Calculate aspect ratios
+        const containerAspect = containerWidth / containerHeight;
+        const viewBoxAspect = VIEWBOX_WIDTH / VIEWBOX_HEIGHT;
+        
+        // Calculate actual rendered size of viewBox within container
+        // With preserveAspectRatio="xMidYMid meet", the viewBox is scaled to fit and centered
+        let renderedWidth, renderedHeight, offsetX, offsetY;
+        
+        if (containerAspect > viewBoxAspect) {
+            // Container is wider than viewBox aspect - fit by height
+            renderedHeight = containerHeight;
+            renderedWidth = renderedHeight * viewBoxAspect;
+            offsetX = (containerWidth - renderedWidth) / 2;
+            offsetY = 0;
+        } else {
+            // Container is taller than viewBox aspect - fit by width
+            renderedWidth = containerWidth;
+            renderedHeight = renderedWidth / viewBoxAspect;
+            offsetX = 0;
+            offsetY = (containerHeight - renderedHeight) / 2;
+        }
+        
+        // Calculate scale from viewBox coordinates to rendered size
+        const scaleX = renderedWidth / VIEWBOX_WIDTH;
+        const scaleY = renderedHeight / VIEWBOX_HEIGHT;
 
-        // ✅ FIX: Account for canvasZoom transformation
-        // When zoom is applied, we need to account for both scale and offset
+        // Get current zoom scale for inverse scaling of label text
         const zoom = appState.ui.canvasZoom;
         
         const positionElement = (element, pos) => {
             if (!element || !pos) return;
-            // ✅ FIX: Apply zoom scale and offset to position calculation
-            // Convert viewBox coordinates to screen coordinates accounting for zoom
-            const screenX = pos.x * scaleX;
-            const screenY = pos.y * scaleY;
+            
+            // Convert viewBox coordinates to container coordinates
+            // Account for the centered position due to preserveAspectRatio
+            const screenX = pos.x * scaleX + offsetX;
+            const screenY = pos.y * scaleY + offsetY;
+            
             element.style.left = `${screenX}px`;
             element.style.top = `${screenY}px`;
             
-            // ✅ FIX: Apply inverse scale to the label element itself to keep text size constant
+            // Apply inverse scale to keep label text size constant during zoom
             const originalTransform = element.dataset.originalTransform || 'translate(-50%, -50%)';
             element.dataset.originalTransform = originalTransform;
             element.style.transform = `scale(${1/zoom.scale}) ${originalTransform}`;
@@ -3785,6 +3818,8 @@ document.addEventListener('DOMContentLoaded', () => {
             a.href=URL.createObjectURL(new Blob([serializeCSV(Object.keys(d[0]), d)], {type:'text/csv'}));
             a.download='analysis_export.csv';
             a.click();
+            // Revoke the blob URL after triggering download to prevent memory leaks
+            URL.revokeObjectURL(a.href);
         } else alert("No data");
     });
     dom.chartResetViewBtn.addEventListener('click', () => {
