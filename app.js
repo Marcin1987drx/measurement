@@ -134,7 +134,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] DOM VALIDATION
     // =========================================
-    // Problem #1: Validate all DOM elements to prevent crashes
+    /**
+     * Problem #1: Validate all DOM elements to prevent crashes
+     * Checks that all required DOM elements exist and logs warnings for missing elements
+     * @returns {boolean} True if validation passed, false if critical elements are missing
+     */
     const validateDOM = () => {
         const missing = [];
         const critical = ['canvasWrapper', 'backgroundImg', 'overlaySvg', 'labelsContainer', 'mpList'];
@@ -1099,10 +1103,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // [SECTION] CANVAS RENDERING
     // =========================================
     
-    // Helper function to escape HTML to prevent XSS
+    /**
+     * Problem #8 & #18: Helper function to escape HTML to prevent XSS
+     * Uses textContent (safe) to set the value, then reads innerHTML (encoded result)
+     * This prevents double-decode attacks by ensuring proper HTML entity encoding
+     * @param {string} text - Text to escape
+     * @returns {string} HTML-escaped text safe for innerHTML
+     */
     const escapeHtml = (text) => {
+        if (text === null || text === undefined) return '';
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = String(text);
         return div.innerHTML;
     };
     
@@ -3516,7 +3527,11 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.analysisFilterGroupTrend.classList.toggle('hidden', appState.ui.analysisMode !== 'trend');
         dom.analysisFilterGroupProfile.classList.toggle('hidden', appState.ui.analysisMode === 'trend');
         dom.mpListContainer.classList.toggle('hidden', appState.ui.analysisMode !== 'trend');
-        if (appState.ui.chartInstance) appState.ui.chartInstance.destroy();
+        // Problem #4: Destroy chart instance when switching modes
+        if (appState.ui.chartInstance) {
+            appState.ui.chartInstance.destroy();
+            appState.ui.chartInstance = null;
+        }
         if (appState.ui.analysisMode === 'trend') {
             populateAnalysisFilters();
             filterAnalysisData();
@@ -3564,7 +3579,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
    
     const generateChart = () => {
-        if (appState.ui.chartInstance) appState.ui.chartInstance.destroy();
+        // Problem #4: Destroy previous chart instance to prevent memory leaks
+        if (appState.ui.chartInstance) {
+            appState.ui.chartInstance.destroy();
+            appState.ui.chartInstance = null;
+        }
         const ctx = dom.analysisChart.getContext('2d'), mode = appState.ui.analysisMode;
         let data, labels, datasets = [];
         if (mode === 'trend') {
