@@ -1650,6 +1650,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         const container = contentDiv.querySelector('#editor-properties-container');
+        
+        // Problem #12: Clean up old nodes to remove event listeners before re-rendering
+        // This prevents memory leaks from accumulated event listeners
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        
         editorData.points.forEach(mp => renderMPCard(mp, container));
     };
 
@@ -2312,8 +2319,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             };
             
-            localStorage.setItem('measurementProject', JSON.stringify(projectData));
-            console.log(`✅ Saved ${projectData.records.length} records to localStorage`);
+            const projectDataStr = JSON.stringify(projectData);
+            
+            // Problem #20: Check localStorage quota before save
+            const dataSize = new Blob([projectDataStr]).size;
+            const dataSizeMB = (dataSize / (1024 * 1024)).toFixed(2);
+            
+            // Most browsers have 5-10MB localStorage limit
+            if (dataSize > 5 * 1024 * 1024) {
+                console.warn(`⚠️ Project data is large (${dataSizeMB}MB). May exceed localStorage quota.`);
+                alert(`Warning: Project data is ${dataSizeMB}MB. This may be too large for localStorage.\n\nConsider exporting or reducing data size.`);
+            }
+            
+            try {
+                localStorage.setItem('measurementProject', projectDataStr);
+                console.log(`✅ Saved ${projectData.records.length} records to localStorage (${dataSizeMB}MB)`);
+            } catch (quotaError) {
+                console.error('❌ localStorage quota exceeded:', quotaError);
+                alert(`Error: Cannot save to localStorage - storage quota exceeded (${dataSizeMB}MB).\n\nPlease reduce data size or clear browser storage.`);
+                throw quotaError;
+            }
             
         } catch (err) {
             console.error('❌ Error saving to localStorage:', err);
@@ -2481,6 +2506,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return reject(error);
             }
             const img = new Image();
+            // Problem #17: Track bgUrl for cleanup
             const bgUrl = URL.createObjectURL(await bgH.getFile());
             img.onload = () => {
                 const { naturalWidth: nw, naturalHeight: nh } = img;
@@ -2675,6 +2701,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             await writeFile(await getOrCreateFile(await getOrCreateDir(await getOrCreateDir(appState.projectRootHandle,'exports'),'visualizations'),fn),b);
                             if(showAlertOnSuccess) alert(t('exportSuccess'));
                         } catch(e){
+                            // Problem #17: Revoke bgUrl on error
+                            URL.revokeObjectURL(bgUrl);
                             reject(e);
                         }
                     } else {
@@ -2685,10 +2713,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         URL.revokeObjectURL(a.href);
                         if(showAlertOnSuccess) alert(t('exportSuccess'));
                     }
+                    // Problem #17: Revoke bgUrl after successful completion
+                    URL.revokeObjectURL(bgUrl);
                     resolve();
                 }, 'image/png');
             };
-            img.onerror = () => reject("Img load error");
+            img.onerror = () => {
+                // Problem #17: Revoke bgUrl on error
+                URL.revokeObjectURL(bgUrl);
+                reject("Img load error");
+            };
             img.src = bgUrl;
         });
     };
@@ -2876,6 +2910,12 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     const getCaretPositionInfo = (element) => {
+        // Problem #13: Validate element before use
+        if (!element || !(element instanceof Element)) {
+            console.warn('getCaretPositionInfo: invalid element');
+            return { position: 0, textBefore: '' };
+        }
+        
         try {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) {
@@ -2896,7 +2936,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Error getting caret position:', err);
             // Fallback
-            const text = element.textContent || '';
+            const text = element?.textContent || '';
             return { position: text.length, textBefore: text };
         }
     };
@@ -3147,7 +3187,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const textAfter = currentText.substring(textBefore.length);
             const newText = currentText.substring(0, textBefore.length - textToReplace.length) + textToInsert + textAfter;
             
-            targetCell.textContent = newText;
+            // Problem #15: Properly manipulate text nodes
+            // Clear existing content first to avoid mixing text nodes and elements
+            while (targetCell.firstChild) {
+                targetCell.removeChild(targetCell.firstChild);
+            }
+            
+            // Add text as a single text node
+            const textNode = document.createTextNode(newText);
+            targetCell.appendChild(textNode);
 
             // Set cursor position with enhanced error handling
             try {
@@ -3155,19 +3203,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sel = window.getSelection();
                 const newCaretPos = textBefore.length - textToReplace.length + textToInsert.length + cursorOffset;
                 
-                // Ensure we have a text node
-                if (targetCell.childNodes.length === 0) {
-                    targetCell.appendChild(document.createTextNode(newText));
-                }
-                
-                if (targetCell.childNodes.length > 0 && targetCell.childNodes[0].nodeType === Node.TEXT_NODE) {
-                    const textNode = targetCell.childNodes[0];
-                    const safePos = Math.max(0, Math.min(newCaretPos, textNode.length));
-                    range.setStart(textNode, safePos);
-                    range.collapse(true);
-                    sel.removeAllRanges();
-                    sel.addRange(range);
-                }
+                // Set cursor in the text node
+                const safePos = Math.max(0, Math.min(newCaretPos, textNode.length));
+                range.setStart(textNode, safePos);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
             } catch (e) {
                 console.error('Error setting cursor position:', e);
                 // Fallback: just focus the cell
@@ -3951,7 +3992,15 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUIStrings();
     
     // Load last used project from localStorage and IndexedDB on startup
+    // Problem #14: Add loading state to prevent race conditions
+    let isLoadingProject = false;
     const loadLastProject = async () => {
+        if (isLoadingProject) {
+            console.warn('⚠️ Project already loading, skipping duplicate call');
+            return;
+        }
+        
+        isLoadingProject = true;
         try {
             // Try to restore the directory handle from IndexedDB
             const savedHandle = await getHandleFromIndexedDB();
@@ -4017,6 +4066,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('❌ Error loading last project:', error);
+        } finally {
+            isLoadingProject = false;
         }
     };
 
