@@ -432,10 +432,16 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.overlaySvg.style.transform = 'translate(0px, 0px) scale(1)';
         dom.labelsContainer.style.transform = 'translate(0px, 0px) scale(1)';
 
-        // Inverse scaling reset
-        const elementsToScale = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label, .resizing-handle');
-        elementsToScale.forEach(el => {
-            const originalTransform = el.dataset.originalTransform || 'translate(-50%, -50%)';
+        // ✅ FIX: Reset label transforms to centering only
+        const labels = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label');
+        labels.forEach(el => {
+            el.style.transform = 'translate(-50%, -50%)';
+        });
+        
+        // Reset resizing handles (keep original transform if set)
+        const handles = dom.labelsContainer.querySelectorAll('.resizing-handle');
+        handles.forEach(el => {
+            const originalTransform = el.dataset.originalTransform || '';
             el.style.transform = originalTransform;
         });
         
@@ -1378,24 +1384,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleX = renderedWidth / VIEWBOX_WIDTH;
         const scaleY = renderedHeight / VIEWBOX_HEIGHT;
 
-        // Get current zoom scale for inverse scaling of label text
-        const zoom = appState.ui.canvasZoom;
-        
         const positionElement = (element, pos) => {
             if (!element || !pos) return;
             
-            // Convert viewBox coordinates to container coordinates
-            // Account for the centered position due to preserveAspectRatio
+            // ✅ FIX: Position labels in viewBox coordinates, not screen coordinates
+            // The CSS transform on labelsContainer will handle the zoom and positioning
+            // This ensures labels stay "glued" to the background during zoom
             const screenX = pos.x * scaleX + offsetX;
             const screenY = pos.y * scaleY + offsetY;
             
             element.style.left = `${screenX}px`;
             element.style.top = `${screenY}px`;
             
-            // Apply inverse scale to keep label text size constant during zoom
-            const originalTransform = element.dataset.originalTransform || 'translate(-50%, -50%)';
-            element.dataset.originalTransform = originalTransform;
-            element.style.transform = `scale(${1/zoom.scale}) ${originalTransform}`;
+            // ✅ FIX: Keep only centering transform, remove inverse scale
+            // Labels should transform WITH the background, not against it
+            element.style.transform = 'translate(-50%, -50%)';
         };
 
         currentData.points?.forEach(mp => {
