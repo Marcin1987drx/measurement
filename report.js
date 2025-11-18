@@ -182,21 +182,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeTheme() {
-    const isDark = reportState.ui.theme === 'dark';
-    document.documentElement.classList.toggle('dark-mode', isDark);
-    console.log(`🎨 Theme: ${reportState.ui.theme}`);
+    const isDark = window.themeManager.load();
+    reportState.ui.theme = isDark ? 'dark' : 'light';
+    window.themeManager.apply(isDark);
 }
 
 function toggleTheme() {
-    const isDark = document.documentElement.classList.toggle('dark-mode');
+    const isDark = window.themeManager.toggle();
     reportState.ui.theme = isDark ? 'dark' : 'light';
-    // ✅ Save to localStorage using 'darkMode' key for consistency with app.js
-    localStorage.setItem('darkMode', isDark.toString());
-    
-    // Propagate theme change across the app
-    const event = new CustomEvent('themeChanged', { detail: { theme: reportState.ui.theme } });
-    window.dispatchEvent(event);
-    console.log(`🎨 Theme toggled to: ${reportState.ui.theme}`);
 }
 
 function initializeLanguage() {
@@ -244,10 +237,8 @@ function changeLanguage(lang) {
 
 async function loadProjectData() {
     try {
-        // Changed from sessionStorage to localStorage
-        const projectDataStr = localStorage.getItem('measurementProject');
-        if (projectDataStr) {
-            const projectData = JSON.parse(projectDataStr);
+        const projectData = window.projectManager.load();
+        if (projectData) {
             reportState.project.name = projectData.name || 'Unknown Project';
             reportState.project.maps = projectData.maps || [];
             reportState.project.records = projectData.records || [];
@@ -1248,7 +1239,7 @@ function renderPointViewImages(record, config = {}) {
     
     // Apply background filter if specified
     if (config.backgroundId) {
-        measurements = measurements.filter(m => m.backgroundId === config.backgroundId || !m.backgroundId);
+        measurements = measurements.filter(m => m.pointBackgroundId === config.backgroundId || !m.pointBackgroundId);
     }
     
     // Apply MP visibility filter (from Properties Panel checkboxes)
