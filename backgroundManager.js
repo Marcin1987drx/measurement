@@ -115,6 +115,8 @@ class BackgroundManager {
         
         return points.filter(mp => {
             if (isGlobal) {
+                // Problem #16: Show orphaned points (without pointBackgroundId) on global background
+                // This ensures points without a specific background assignment are always visible
                 return !mp.pointBackgroundId || mp.pointBackgroundId === meta.globalBackgroundId;
             }
             return mp.pointBackgroundId === activeBg.id;
