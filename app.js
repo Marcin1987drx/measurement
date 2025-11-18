@@ -1014,11 +1014,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgRect = dom.backgroundImg.getBoundingClientRect();
         const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
         const commonStyle = `position: absolute; top: ${imgRect.top - wrapperRect.top}px; left: ${imgRect.left - wrapperRect.left}px; width: ${imgRect.width}px; height: ${imgRect.height}px;`;
+        
+        // ✅ FIXED: Preserve transform and transition before using cssText
+        // cssText overwrites ALL styles, including transform applied by applyCanvasZoom()
+        const svgTransform = dom.overlaySvg.style.transform;
+        const labelsTransform = dom.labelsContainer.style.transform;
+        const svgTransition = dom.overlaySvg.style.transition;
+        const labelsTransition = dom.labelsContainer.style.transition;
+        
         // SVG and labels container have pointer-events set in CSS
         // SVG has pointer-events: none, but circles/lines inside have pointer-events: auto
         // Labels container has pointer-events: none, but labels themselves have pointer-events: auto
         dom.overlaySvg.style.cssText = commonStyle;
         dom.labelsContainer.style.cssText = commonStyle;
+        
+        // ✅ FIXED: Restore transform and transition after cssText
+        dom.overlaySvg.style.transform = svgTransform;
+        dom.labelsContainer.style.transform = labelsTransform;
+        dom.overlaySvg.style.transition = svgTransition;
+        dom.labelsContainer.style.transition = labelsTransition;
+        
+        console.log(`🔧 syncOverlayDimensions: preserved transform="${svgTransform}"`);
+        
         fitLabelsToView();
     };
 
