@@ -278,19 +278,30 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.overlaySvg.style.transform = transform;
         dom.labelsContainer.style.transform = transform;
 
-        // Scale labels and handles inversely so they don't grow/shrink
-        const elementsToScale = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label, .resizing-handle');
-        elementsToScale.forEach(el => {
-            // We store original transform in a data attribute to avoid conflicts
-            const originalTransform = el.dataset.originalTransform || 'translate(-50%, -50%)';
-            el.dataset.originalTransform = originalTransform;
-            // Apply scale first, then translation so translation is not affected by scale
-            el.style.transform = `scale(${1/scale}) ${originalTransform}`;
-        });
+        // ✅ FIX: Update stroke-width and handle radius in SVG elements with inverse scale
+        // This is done during applyCanvasZoom because renderCanvas may not be called
+        const svgGroup = dom.overlaySvg.querySelector('#svg-content-group');
+        if (svgGroup) {
+            const lines = svgGroup.querySelectorAll('line');
+            lines.forEach(line => {
+                // Base width was stored during renderCanvas
+                const baseWidth = parseFloat(line.dataset.baseStrokeWidth || 2);
+                line.setAttribute('stroke-width', baseWidth / scale);
+            });
+            
+            const handles = svgGroup.querySelectorAll('circle');
+            handles.forEach(handle => {
+                handle.setAttribute('r', 8 / scale);
+            });
+        }
         
-        const svgHandles = dom.overlaySvg.querySelectorAll('circle');
-        svgHandles.forEach(handle => {
-             handle.setAttribute('r', 8 / scale);
+        // Scale labels inversely so they don't grow/shrink - this is now handled in fitLabelsToView
+        // But we need to handle other elements like resizing-handle here
+        const resizingHandles = dom.labelsContainer.querySelectorAll('.resizing-handle');
+        resizingHandles.forEach(el => {
+            const originalTransform = el.dataset.originalTransform || '';
+            el.dataset.originalTransform = originalTransform;
+            el.style.transform = `scale(${1/scale}) ${originalTransform}`;
         });
 
         if (!animate) {
@@ -353,10 +364,21 @@ document.addEventListener('DOMContentLoaded', () => {
             el.style.transform = originalTransform;
         });
         
-        const svgHandles = dom.overlaySvg.querySelectorAll('circle');
-        svgHandles.forEach(handle => {
-            handle.setAttribute('r', '8');
-        });
+        // ✅ FIX: Reset SVG elements in the group
+        const svgGroup = dom.overlaySvg.querySelector('#svg-content-group');
+        if (svgGroup) {
+            const lines = svgGroup.querySelectorAll('line');
+            lines.forEach(line => {
+                // Reset to base width (scale = 1)
+                const baseWidth = parseFloat(line.dataset.baseStrokeWidth || 2);
+                line.setAttribute('stroke-width', baseWidth);
+            });
+            
+            const handles = svgGroup.querySelectorAll('circle');
+            handles.forEach(handle => {
+                handle.setAttribute('r', '8');
+            });
+        }
 
         if (!animate) {
             setTimeout(() => {
@@ -1107,6 +1129,15 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         dom.overlaySvg.appendChild(defs);
 
+        // ✅ FIX: Create a group inside SVG to apply transformations
+        // This keeps SVG elements synchronized with the viewBox coordinate system
+        const svgGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        svgGroup.id = 'svg-content-group';
+        dom.overlaySvg.appendChild(svgGroup);
+
+        // Get current zoom scale to apply inverse scaling to visual properties
+        const currentScale = appState.ui.canvasZoom.scale;
+
         filteredPoints.forEach(mp => {
             const arrowsToRender = mp.arrows || [{ x1: mp.x1, y1: mp.y1, x2: mp.x2, y2: mp.y2, style: mp.style }];
 
@@ -1122,14 +1153,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 line.setAttribute('x2', arrow.x2);
                 line.setAttribute('y2', arrow.y2);
                 line.setAttribute('stroke', arrow.style?.color || mp.style?.color || '#007aff');
-                line.setAttribute('stroke-width', arrow.style?.width || mp.style?.width || 2);
+                // ✅ FIX: Scale stroke-width inversely to maintain constant visual size
+                const baseStrokeWidth = arrow.style?.width || mp.style?.width || 2;
+                line.setAttribute('stroke-width', baseStrokeWidth / currentScale);
+                // Store base width for use in applyCanvasZoom
+                line.dataset.baseStrokeWidth = baseStrokeWidth;
                 const head = arrow.style?.head || mp.style?.head;
                 if (head === 'arrow') line.setAttribute('marker-end', `url(#arrowhead)`);
                 else if (head === 'double') {
                     line.setAttribute('marker-start', `url(#arrowhead)`);
                     line.setAttribute('marker-end', `url(#arrowhead)`);
                 }
-                dom.overlaySvg.appendChild(line);
+                svgGroup.appendChild(line); // ✅ Append to group instead of SVG root
 
                 if (isEditor) {
                     ['start', 'end'].forEach(type => {
@@ -1137,11 +1172,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         Object.assign(handle.dataset, { mpId: mp.id, handleType: type, arrowIndex: index });
                         handle.setAttribute('cx', type === 'start' ? arrow.x1 : arrow.x2);
                         handle.setAttribute('cy', type === 'start' ? arrow.y1 : arrow.y2);
-                        handle.setAttribute('r', '8');
+                        // ✅ FIX: Scale handle radius inversely to maintain constant visual size
+                        handle.setAttribute('r', 8 / currentScale);
                         handle.setAttribute('fill', 'rgba(0, 122, 255, 0.5)');
                         handle.style.cursor = 'move';
                         handle.style.pointerEvents = 'all';
-                        dom.overlaySvg.appendChild(handle);
+                        svgGroup.appendChild(handle); // ✅ Append to group instead of SVG root
                     });
                 }
             });
@@ -1236,10 +1272,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const scaleX = baseWidth / VIEWBOX_WIDTH;
         const scaleY = baseHeight / VIEWBOX_HEIGHT;
 
+        // ✅ FIX: Account for canvasZoom transformation
+        // When zoom is applied, we need to account for both scale and offset
+        const zoom = appState.ui.canvasZoom;
+        
         const positionElement = (element, pos) => {
             if (!element || !pos) return;
-            element.style.left = `${pos.x * scaleX}px`;
-            element.style.top = `${pos.y * scaleY}px`;
+            // ✅ FIX: Apply zoom scale and offset to position calculation
+            // Convert viewBox coordinates to screen coordinates accounting for zoom
+            const screenX = pos.x * scaleX;
+            const screenY = pos.y * scaleY;
+            element.style.left = `${screenX}px`;
+            element.style.top = `${screenY}px`;
+            
+            // ✅ FIX: Apply inverse scale to the label element itself to keep text size constant
+            const originalTransform = element.dataset.originalTransform || 'translate(-50%, -50%)';
+            element.dataset.originalTransform = originalTransform;
+            element.style.transform = `scale(${1/zoom.scale}) ${originalTransform}`;
         };
 
         currentData.points?.forEach(mp => {
