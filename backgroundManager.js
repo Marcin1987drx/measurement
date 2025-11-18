@@ -8,7 +8,7 @@ class BackgroundManager {
         console.log('🔄 Migrating background data...');
         
         if (meta.backgroundFile && meta.backgrounds.length === 0) {
-            const bgId = `bg_migrated_${Date.now()}`;
+            const bgId = `bg_migrated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             meta.backgrounds.push({ 
                 id: bgId, 
                 name: 'Default Background', 
@@ -73,7 +73,11 @@ class BackgroundManager {
         }
         
         const activeBg = meta.backgrounds?.find(b => b.fileName === activeBackgroundFileName);
-        if (!activeBg) return [];
+        if (!activeBg) {
+            console.warn(`⚠️ Background not found: ${activeBackgroundFileName}`);
+            console.log('Available backgrounds:', meta.backgrounds?.map(b => b.fileName));
+            return [];
+        }
         
         const isGlobal = activeBg.id === meta.globalBackgroundId;
         

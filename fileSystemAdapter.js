@@ -5,6 +5,7 @@ class FileSystemAdapter {
         this.dbName = 'MeasurementHandlesDB';
         this.dbVersion = 1;
         this.storeName = 'directoryHandles';
+        this.imageURLCache = new Map(); // Track created blob URLs for cleanup
     }
 
     /**
@@ -235,11 +236,43 @@ class FileSystemAdapter {
 
     async getImageURL(path) {
         if (this.mode === 'local') {
+            // Revoke previous URL for this path if it exists
+            if (this.imageURLCache.has(path)) {
+                URL.revokeObjectURL(this.imageURLCache.get(path));
+            }
+            
             const handle = await this.getHandle(path);
             const file = await handle.getFile();
-            return URL.createObjectURL(file);
+            const url = URL.createObjectURL(file);
+            
+            // Cache the URL for future cleanup
+            this.imageURLCache.set(path, url);
+            return url;
         }
         return `/api/files/image?project=${this.projectRoot}&path=${encodeURIComponent(path)}`;
+    }
+
+    /**
+     * Revoke a specific image URL to prevent memory leaks
+     * @param {string} path - Path to the image file
+     */
+    revokeImageURL(path) {
+        if (this.imageURLCache.has(path)) {
+            URL.revokeObjectURL(this.imageURLCache.get(path));
+            this.imageURLCache.delete(path);
+            console.log(`✅ Revoked URL for: ${path}`);
+        }
+    }
+
+    /**
+     * Revoke all cached image URLs to prevent memory leaks
+     */
+    revokeAllImageURLs() {
+        for (const [path, url] of this.imageURLCache.entries()) {
+            URL.revokeObjectURL(url);
+        }
+        this.imageURLCache.clear();
+        console.log('✅ All cached image URLs revoked');
     }
 
     async readLocal(path) {
@@ -261,15 +294,23 @@ class FileSystemAdapter {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ project: this.projectRoot, path })
         });
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errorText}`);
+        }
         return await res.text();
     }
 
     async writeServer(path, data) {
-        await fetch('/api/files/write', {
+        const res = await fetch('/api/files/write', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ project: this.projectRoot, path, content: data })
         });
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errorText}`);
+        }
     }
 
     async getHandle(path, create = false) {
