@@ -55,15 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
             dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
             dbDraggedColumnIndex: -1,
             formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null },
-            // @copilot-suggestion: New state property to track the currently displayed background file.
             activeBackgroundFile: null,
             renderScheduled: false
         }
     };
 
-    const VIEWBOX_WIDTH = 1000;
-    const VIEWBOX_HEIGHT = 700;
-    const READONLY_COLS = ['RecordId', 'Timestamp', 'SchemaName', 'SchemaVersion', 'OverallStatus', 'Comment'];
+    const VIEWBOX_WIDTH = CONFIG.VIEWBOX_WIDTH;
+    const VIEWBOX_HEIGHT = CONFIG.VIEWBOX_HEIGHT;
+    const READONLY_COLS = TERMINOLOGY.READONLY_COLUMNS;
 
     // =========================================
     // [SECTION] DOM ELEMENTS
@@ -143,10 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const t = (key) => translations[appState.ui.language]?.[key] || key;
     const formatNumber = (num, digits = 3) => {
         if (typeof num !== 'number') return num;
-        return num.toLocaleString(appState.ui.language === 'en' ? 'en-US' : 'de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        const locale = CONFIG.LOCALE_MAP[appState.ui.language] || 'en-US';
+        return num.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
     };
 
-    const updateTheme = (isDark) => document.documentElement.classList.toggle('dark-mode', isDark);
+    const updateTheme = (isDark) => window.themeManager.apply(isDark);
 
     const selectMP = async (id) => {
         appState.ui.selectedMPId = id;
@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mapHandle = appState.fileHandles.maps[`${key}.map.json`];
             if (mapHandle) {
                 try {
-                    const mapData = JSON.parse(await readFile(mapHandle));
+                    let mapData = JSON.parse(await readFile(mapHandle));
                     mapData.fileName = key;
                     // DATA MIGRATION V1.0 -> V1.1
                     mapData.points.forEach(mp => {
@@ -509,6 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!mp.type) mp.type = 'single';
                         if (!mp.view) mp.view = null;
                     });
+                    // Background migration
+                    mapData = window.backgroundManager.migrate(mapData);
                     appState.data.currentMap = mapData;
                 } catch (err) { console.error(`Error loading map ${key}.map.json`, err); }
             }
@@ -519,25 +521,10 @@ document.addEventListener('DOMContentLoaded', () => {
         requestRender();
     };
 
-    // @copilot-suggestion: Centralized function to determine and load the correct background.
     const updateActiveBackground = async () => {
         const currentData = appState.ui.isEditorOpen ? appState.ui.editorState : appState.data.currentMap;
-        if (!currentData?.meta?.backgrounds) {
-            appState.ui.activeBackgroundFile = null;
-            await loadAndDisplayBackground(null);
-            return;
-        }
-    
-        let bgId = currentData.meta.globalBackground || null;
-        const selectedMP = appState.ui.selectedMPId ? currentData.points.find(p => p.id === appState.ui.selectedMPId) : null;
-    
-        if (selectedMP?.backgroundId) {
-            bgId = selectedMP.backgroundId;
-        }
-    
-        const bg = bgId ? currentData.meta.backgrounds.find(b => b.id === bgId) : null;
-        const bgFileName = bg ? bg.fileName : null;
-    
+        const bgFileName = window.backgroundManager.getBackgroundFileName(currentData, appState.ui.selectedMPId);
+        
         if (appState.ui.activeBackgroundFile !== bgFileName) {
             appState.ui.activeBackgroundFile = bgFileName;
             await loadAndDisplayBackground(bgFileName);
@@ -803,7 +790,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] CANVAS RENDERING
     // =========================================
-    // @copilot-suggestion: New function to request a render, debouncing multiple calls.
     const requestRender = () => {
         if (appState.ui.renderScheduled) return;
         appState.ui.renderScheduled = true;
@@ -841,33 +827,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fitLabelsToView();
     };
 
-    // @copilot-suggestion: New function to clearly separate the logic of finding visible MPs.
     const getVisiblePointsForCurrentView = () => {
         const currentData = appState.ui.isEditorOpen ? appState.ui.editorState : appState.data.currentMap;
-        if (!currentData || !currentData.points) return [];
-    
-        const { points, meta } = currentData;
-        const { activeBackgroundFile } = appState.ui;
-    
-        if (!activeBackgroundFile) {
-            // If no background is active, show only points that have NO background assigned.
-            return points.filter(mp => !mp.backgroundId);
-        }
-    
-        const activeBg = meta.backgrounds.find(b => b.fileName === activeBackgroundFile);
-        if (!activeBg) return [];
-    
-        const isGlobal = activeBg.id === meta.globalBackground;
-    
-        return points.filter(mp => {
-            if (isGlobal) {
-                // If viewing global background, show points with no specific bg or those explicitly set to global.
-                return !mp.backgroundId || mp.backgroundId === meta.globalBackground;
-            } else {
-                // If viewing a specific background, show only points assigned to it.
-                return mp.backgroundId === activeBg.id;
-            }
-        });
+        return window.backgroundManager.getVisiblePoints(currentData, appState.ui.activeBackgroundFile);
     };
 
     const renderCanvas = (recordData = null) => {
@@ -1112,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
         if (open) {
             if (isNew) {
-                appState.ui.editorState = { name: '', version: '', meta: { backgrounds: [], globalBackground: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
+                appState.ui.editorState = { name: '', version: '', meta: { backgrounds: [], globalBackgroundId: null, showQR: false, showDate: false, qrLabelPos: {x:100, y:50}, dateLabelPos: {x:100, y:80} }, points: [] };
                 dom.mapSelect.value = '';
             } else {
                 const mapKey = dom.mapSelect.value;
@@ -1125,19 +1087,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.ui.editorState.originalFileName = mapKey;
             }
     
-            // Data migration for meta and background properties
-            const meta = appState.ui.editorState.meta = appState.ui.editorState.meta || {};
-            meta.backgrounds = meta.backgrounds || [];
-            if (meta.backgroundFile && meta.backgrounds.length === 0) {
-                const bgId = `bg_migrated_${Date.now()}`;
-                meta.backgrounds.push({ id: bgId, name: 'Background', fileName: meta.backgroundFile });
-                meta.globalBackground = bgId;
-            } else if (meta.defaultBackground && !meta.globalBackground) {
-                meta.globalBackground = meta.defaultBackground;
-            } else if (meta.backgroundId && !meta.globalBackground) {
-                meta.globalBackground = meta.backgroundId;
-            }
-            delete meta.backgroundFile; delete meta.defaultBackground; delete meta.backgroundId;
+            // Background migration
+            appState.ui.editorState = window.backgroundManager.migrate(appState.ui.editorState);
     
             appState.ui.editorIsDirty = false;
             renderSchemaInspector();
@@ -1173,13 +1124,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <select id="editor-global-bg-select" class="select-field">
                         <option value="">None</option>
                         ${(editorData.meta.backgrounds || []).map(bg => 
-                            `<option value="${bg.id}" ${editorData.meta.globalBackground === bg.id ? 'selected' : ''}>${bg.name}</option>`
+                            `<option value="${bg.id}" ${editorData.meta.globalBackgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
                         ).join('')}
                     </select>
                 </div>
                 <div id="editor-bg-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px;">
                     ${(editorData.meta.backgrounds || []).map(bg => `
-                        <div class="bg-thumbnail" data-bg-id="${bg.id}" style="position: relative; border: 2px solid ${editorData.meta.globalBackground === bg.id ? 'var(--accent-color)' : 'var(--border-color)'}; padding: 8px; border-radius: 6px; cursor: pointer;">
+                        <div class="bg-thumbnail" data-bg-id="${bg.id}" style="position: relative; border: 2px solid ${editorData.meta.globalBackgroundId === bg.id ? 'var(--accent-color)' : 'var(--border-color)'}; padding: 8px; border-radius: 6px; cursor: pointer;">
                             <div style="width: 100%; height: 100px; background: var(--canvas-bg); border-radius: 4px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;">
                                 <span style="font-size: 2em;">🖼️</span>
                             </div>
@@ -1205,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         contentDiv.querySelector('#editor-global-bg-select').addEventListener('change', async (e) => {
             const newGlobalBgId = e.target.value === '' ? null : e.target.value;
-            editorData.meta.globalBackground = newGlobalBgId;
+            editorData.meta.globalBackgroundId = newGlobalBgId;
             appState.ui.editorIsDirty = true;
             await updateActiveBackground();
             renderSchemaInspector(); // Re-render to update highlight
@@ -1216,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             thumb.addEventListener('click', async (e) => {
                 if (e.target.classList.contains('btn-delete-bg')) return;
                 const bgId = thumb.dataset.bgId;
-                editorData.meta.globalBackground = bgId;
+                editorData.meta.globalBackgroundId = bgId;
                 appState.ui.editorIsDirty = true;
                 await updateActiveBackground();
                 renderSchemaInspector();
@@ -1231,11 +1182,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const bg = (editorData.meta.backgrounds || []).find(b => b.id === bgId);
                 if (confirm(`Delete background "${bg?.name || bgId}"? MPs using it will revert to global background.`)) {
                     editorData.meta.backgrounds = (editorData.meta.backgrounds || []).filter(b => b.id !== bgId);
-                    if (editorData.meta.globalBackground === bgId) {
-                        editorData.meta.globalBackground = null;
+                    if (editorData.meta.globalBackgroundId === bgId) {
+                        editorData.meta.globalBackgroundId = null;
                     }
                     editorData.points.forEach(mp => { 
-                        if (mp.backgroundId === bgId) mp.backgroundId = null;
+                        if (mp.pointBackgroundId === bgId) mp.pointBackgroundId = null;
                     });
                     appState.ui.editorIsDirty = true;
                     await updateActiveBackground();
@@ -1298,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
 
         const backgroundOptions = (appState.ui.editorState.meta.backgrounds || []).map(bg => 
-            `<option value="${bg.id}" ${mp.backgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
+            `<option value="${bg.id}" ${mp.pointBackgroundId === bg.id ? 'selected' : ''}>${bg.name}</option>`
         ).join('');
         
         const backgroundSelectHtml = `
@@ -1531,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 style: { color: '#007aff', width: 2, head: 'arrow' }
             }], 
             view: null,
-            backgroundId: selectedMP?.backgroundId || null
+            pointBackgroundId: selectedMP?.pointBackgroundId || null
         });
         
         appState.ui.editorIsDirty = true;
@@ -1610,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 Name: record[`${mpId}_Name`] || mpId,
                                 Value: value, Unit: record[`${mpId}_Unit`] || 'mm',
                                 Min: min || '', Max: max || '', Nominal: record[`${mpId}_Nominal`] || '',
-                                Status: status, backgroundId: record[`${mpId}_BackgroundId`] || null
+                                Status: status, pointBackgroundId: record[`${mpId}_BackgroundId`] || null
                             });
                         }
                     });
@@ -1650,7 +1601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             [`${mp.id}_${col.name}_Value`]: val, [`${mp.id}_${col.name}_Nominal`]: col.nominal,
                             [`${mp.id}_${col.name}_Min`]: col.min, [`${mp.id}_${col.name}_Max`]: col.max,
                             [`${mp.id}_${col.name}_Unit`]: col.unit, [`${mp.id}_${col.name}_Name`]: col.name,
-                            [`${mp.id}_${col.name}_BackgroundId`]: mp.backgroundId || null
+                            [`${mp.id}_${col.name}_BackgroundId`]: mp.pointBackgroundId || null
                         });
                     });
                 } else {
@@ -1660,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     Object.assign(mpData, {
                         [`${mp.id}_Value`]: val, [`${mp.id}_Nominal`]: mp.nominal, [`${mp.id}_Min`]: mp.min,
                         [`${mp.id}_Max`]: mp.max, [`${mp.id}_Unit`]: mp.unit, [`${mp.id}_Name`]: mp.name,
-                        [`${mp.id}_BackgroundId`]: mp.backgroundId || null
+                        [`${mp.id}_BackgroundId`]: mp.pointBackgroundId || null
                     });
                 }
             });
@@ -1680,7 +1631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await saveProjectToLocalStorage();
             
             const meta = appState.data.currentMap.meta;
-            if (!meta || (!meta.globalBackground && !meta.backgroundFile)) { // Check legacy too
+            if (!meta || (!meta.globalBackgroundId && !meta.backgroundFile)) { // Check legacy too
                 alert("Schemat nie ma skonfigurowanego tła. Proszę edytować schemat i dodać obraz tła.");
                 return;
             }
@@ -1716,7 +1667,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bg) backgroundFileName = bg.fileName;
             
             if (!backgroundFileName) {
-                const globalBg = cMap.meta.globalBackground ? cMap.meta.backgrounds.find(b => b.id === cMap.meta.globalBackground) : null;
+                const globalBg = cMap.meta.globalBackgroundId ? cMap.meta.backgrounds.find(b => b.id === cMap.meta.globalBackgroundId) : null;
                 if (globalBg) backgroundFileName = globalBg.fileName;
             }
             if (!backgroundFileName && cMap.meta.backgroundFile) backgroundFileName = cMap.meta.backgroundFile;
@@ -1842,15 +1793,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!mapData) throw new Error("No map data");
             
             const uniqueBackgrounds = new Set();
-            if (mapData.meta.globalBackground) uniqueBackgrounds.add(mapData.meta.globalBackground);
-            mapData.points.forEach(mp => { if (mp.backgroundId) uniqueBackgrounds.add(mp.backgroundId); });
+            if (mapData.meta.globalBackgroundId) uniqueBackgrounds.add(mapData.meta.globalBackgroundId);
+            mapData.points.forEach(mp => { if (mp.pointBackgroundId) uniqueBackgrounds.add(mp.pointBackgroundId); });
             
             for (const bgId of uniqueBackgrounds) {
                 const bg = mapData.meta.backgrounds.find(b => b.id === bgId);
                 if (!bg) continue;
                 
                 const mpsForThisBg = mapData.points.filter(mp => {
-                    return (bgId === mapData.meta.globalBackground) ? !mp.backgroundId : mp.backgroundId === bgId;
+                    return (bgId === mapData.meta.globalBackgroundId) ? !mp.pointBackgroundId : mp.pointBackgroundId === bgId;
                 });
                 
                 await exportPNG({
@@ -1864,7 +1815,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const mp of mapData.points) {
                 if (!mp.view || !mp.view.scale || mp.view.scale <= 1) continue;
                 
-                const bgId = mp.backgroundId || mapData.meta.globalBackground;
+                const bgId = mp.pointBackgroundId || mapData.meta.globalBackgroundId;
                 const bg = mapData.meta.backgrounds.find(b => b.id === bgId);
                 if (!bg) continue;
                 
@@ -2400,9 +2351,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     if (!checkFSAPISupport()) return;
     
-    const savedDarkMode = localStorage.getItem('darkMode');
-    const isDarkMode = savedDarkMode === 'true' || (savedDarkMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    updateTheme(isDarkMode);
+    const isDarkMode = window.themeManager.load();
+    window.themeManager.apply(isDarkMode);
     
     dom.languageToggle.addEventListener('change', (e) => {
         const newLang = e.target.value;
@@ -2412,9 +2362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     dom.themeToggle.addEventListener('click', () => {
-        const isDark = document.documentElement.classList.toggle('dark-mode');
-        updateTheme(isDark);
-        localStorage.setItem('darkMode', isDark.toString());
+        window.themeManager.toggle();
     });
 
     dom.btnProjectFolder.addEventListener('click', async () => {
@@ -2455,7 +2403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) { alert(`Failed to upload background file: ${f.name}`); }
         }
         
-        if (isFirstBackground && lastUploadedBgId) appState.ui.editorState.meta.globalBackground = lastUploadedBgId;
+        if (isFirstBackground && lastUploadedBgId) appState.ui.editorState.meta.globalBackgroundId = lastUploadedBgId;
         
         if (lastUploadedBgId) {
             appState.ui.editorIsDirty = true;
