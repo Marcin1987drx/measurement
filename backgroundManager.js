@@ -1,4 +1,10 @@
 class BackgroundManager {
+    /**
+     * Migrate old background data structure to new format
+     * Converts legacy backgroundFile property to backgrounds array
+     * @param {Object} mapData - Map data object to migrate
+     * @returns {Object} Migrated map data
+     */
     static migrate(mapData) {
         if (!mapData) return mapData;
         
@@ -8,7 +14,7 @@ class BackgroundManager {
         console.log('🔄 Migrating background data...');
         
         if (meta.backgroundFile && meta.backgrounds.length === 0) {
-            const bgId = `bg_migrated_${Date.now()}`;
+            const bgId = `bg_migrated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             meta.backgrounds.push({ 
                 id: bgId, 
                 name: 'Default Background', 
@@ -41,6 +47,13 @@ class BackgroundManager {
         return mapData;
     }
     
+    /**
+     * Get the active background ID for display
+     * Returns point-specific background if point is selected, otherwise global background
+     * @param {Object} mapData - Map data object
+     * @param {string|null} selectedPointId - ID of selected point (optional)
+     * @returns {string|null} Active background ID or null
+     */
     static getActiveBackgroundId(mapData, selectedPointId = null) {
         if (!mapData?.meta?.backgrounds) return null;
         
@@ -52,17 +65,36 @@ class BackgroundManager {
         return mapData.meta.globalBackgroundId || null;
     }
     
+    /**
+     * Get background object by ID
+     * @param {Object} mapData - Map data object
+     * @param {string} backgroundId - Background ID to look up
+     * @returns {Object|null} Background object or null if not found
+     */
     static getBackgroundById(mapData, backgroundId) {
         if (!backgroundId || !mapData?.meta?.backgrounds) return null;
         return mapData.meta.backgrounds.find(bg => bg.id === backgroundId) || null;
     }
     
+    /**
+     * Get the filename of the active background
+     * @param {Object} mapData - Map data object
+     * @param {string|null} selectedPointId - ID of selected point (optional)
+     * @returns {string|null} Background filename or null
+     */
     static getBackgroundFileName(mapData, selectedPointId = null) {
         const bgId = this.getActiveBackgroundId(mapData, selectedPointId);
         const bg = this.getBackgroundById(mapData, bgId);
         return bg?.fileName || null;
     }
     
+    /**
+     * Get all points that should be visible for a given background
+     * Filters points based on their background assignment
+     * @param {Object} mapData - Map data object
+     * @param {string} activeBackgroundFileName - Filename of currently active background
+     * @returns {Array} Array of visible measurement points
+     */
     static getVisiblePoints(mapData, activeBackgroundFileName) {
         if (!mapData?.points) return [];
         
@@ -73,7 +105,11 @@ class BackgroundManager {
         }
         
         const activeBg = meta.backgrounds?.find(b => b.fileName === activeBackgroundFileName);
-        if (!activeBg) return [];
+        if (!activeBg) {
+            console.warn(`⚠️ Background not found: ${activeBackgroundFileName}`);
+            console.log('Available backgrounds:', meta.backgrounds?.map(b => b.fileName));
+            return [];
+        }
         
         const isGlobal = activeBg.id === meta.globalBackgroundId;
         

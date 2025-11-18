@@ -134,9 +134,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // [SECTION] TRANSLATIONS & HELPERS
     // =========================================
     const translations = {
-        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Schema Version', drawingBackground: 'Drawing Background', metaLabels: 'Meta Labels', showQR: 'Show QR', showDate: 'Show Date', selectMapPrompt: 'Select a schema to begin.', comment: 'Comment', save: 'Save', saveSuccess: 'Saved!', map: 'Schema', deleteSchema: 'Delete Schema', confirmDelete: 'Are you sure you want to delete this schema?', deleteSuccess: 'Schema deleted.', deleteError: 'Error deleting schema.', schemaInfoMissing: 'Schema Name and Version are required.', saveError: 'Error saving.', exportSuccess: 'Export successful!', confirmExitEditor: 'You have unsaved changes. Are you sure you want to exit?', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Arrows', addArrow: 'Add Arrow', arrowWidth: 'Width', arrowColor: 'Color', arrowHead: 'Head', columns: 'Columns', addColumn: 'Add Column', setView: 'Set View', clearView: 'Clear View', confirmDeleteRecord: "Are you sure you to delete this record?", exportPNG: "Export PNG", actions: "Actions" },
-        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja Schematu', drawingBackground: 'Tło Rysunku', metaLabels: 'Etykiety Meta', showQR: 'Pokaż QR', showDate: 'Pokaż Datę', selectMapPrompt: 'Wybierz schemat, aby rozpocząć.', comment: 'Komentarz', save: 'Zapisz', saveSuccess: 'Zapisano!', map: 'Schemat', deleteSchema: 'Usuń Schemat', confirmDelete: 'Czy na pewno chcesz usunąć ten schemat?', deleteSuccess: 'Schemat usunięty.', deleteError: 'Błąd podczas usuwania schematu.', schemaInfoMissing: 'Nazwa i wersja schematu są wymagane.', saveError: 'Błąd zapisu.', exportSuccess: 'Eksport udany!', confirmExitEditor: 'Masz niezapisane zmiany. Czy na pewno chcesz wyjść?', name: 'Nazwa', unit: 'Jedn.', nominal: 'Nominał', min: 'Min', max: 'Max', arrows: 'Strzałki', addArrow: 'Dodaj strzałkę', arrowWidth: 'Szerokość', arrowColor: 'Kolor', arrowHead: 'Grot', columns: 'Kolumny', addColumn: 'Dodaj kolumnę', setView: 'Ustaw Widok', clearView: 'Wyczyść Widok', confirmDeleteRecord: "Czy na pewno chcesz usunąć ten rekord?", exportPNG: "Eksportuj PNG", actions: "Akcje" },
-        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Schemaversion', drawingBackground: 'Zeichnungshintergrund', metaLabels: 'Meta-Labels', showQR: 'QR anzeigen', showDate: 'Datum anzeigen', selectMapPrompt: 'Wählen Sie ein Schema, um zu beginnen.', comment: 'Kommentar', save: 'Speichern', saveSuccess: 'Gespeichert!', map: 'Schema', deleteSchema: 'Schema löschen', confirmDelete: 'Sind Sie sicher, dass Sie dieses Schema löschen möchten?', deleteSuccess: 'Schema gelöscht.', deleteError: 'Fehler beim Löschen des Schemas.', schemaInfoMissing: 'Schemaname und -version sind erforderlich.', saveError: 'Fehler beim Speichern.', exportSuccess: 'Export erfolgreich!', confirmExitEditor: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie den Editor verlassen möchten?', name: 'Name', unit: 'Einheit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Pfeile', addArrow: 'Pfeil hinzufügen', arrowWidth: 'Breite', arrowColor: 'Farbe', arrowHead: 'Spitze', columns: 'Spalten', addColumn: 'Spalte hinzufügen', setView: 'Ansicht festlegen', clearView: 'Ansicht löschen', confirmDeleteRecord: "Möchten Sie diesen Datensatz wirklich löschen?", exportPNG: "PNG exportieren", actions: "Aktionen" },
+        en: { projectFolder: 'Project Folder', editSchema: 'Edit Schema', newSchema: 'New Schema', dbViewer: 'DB Viewer', analysis: 'Analysis', qrCode: 'QR Code', schemaName: 'Schema Name', schemaVersion: 'Schema Version', drawingBackground: 'Drawing Background', metaLabels: 'Meta Labels', showQR: 'Show QR', showDate: 'Show Date', selectMapPrompt: 'Select a schema to begin.', comment: 'Comment', save: 'Save', saveSuccess: 'Saved!', map: 'Schema', deleteSchema: 'Delete Schema', confirmDelete: 'Are you sure you want to delete this schema?', deleteSuccess: 'Schema deleted.', deleteError: 'Error deleting schema.', schemaInfoMissing: 'Schema Name and Version are required.', saveError: 'Error saving.', exportSuccess: 'Export successful!', confirmExitEditor: 'You have unsaved changes. Are you sure you want to exit?', name: 'Name', unit: 'Unit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Arrows', addArrow: 'Add Arrow', arrowWidth: 'Width', arrowColor: 'Color', arrowHead: 'Head', columns: 'Columns', addColumn: 'Add Column', setView: 'Set View', clearView: 'Clear View', confirmDeleteRecord: "Are you sure you to delete this record?", exportPNG: "Export PNG", actions: "Actions", renameColumn: 'Rename Column', applyFormula: 'Apply Formula...', deleteColumn: 'Delete Column' },
+        pl: { projectFolder: 'Folder Projektu', editSchema: 'Edytuj Schemat', newSchema: 'Nowy Schemat', dbViewer: 'Baza Danych', analysis: 'Analiza', qrCode: 'Kod QR', schemaName: 'Nazwa Schematu', schemaVersion: 'Wersja Schematu', drawingBackground: 'Tło Rysunku', metaLabels: 'Etykiety Meta', showQR: 'Pokaż QR', showDate: 'Pokaż Datę', selectMapPrompt: 'Wybierz schemat, aby rozpocząć.', comment: 'Komentarz', save: 'Zapisz', saveSuccess: 'Zapisano!', map: 'Schemat', deleteSchema: 'Usuń Schemat', confirmDelete: 'Czy na pewno chcesz usunąć ten schemat?', deleteSuccess: 'Schemat usunięty.', deleteError: 'Błąd podczas usuwania schematu.', schemaInfoMissing: 'Nazwa i wersja schematu są wymagane.', saveError: 'Błąd zapisu.', exportSuccess: 'Eksport udany!', confirmExitEditor: 'Masz niezapisane zmiany. Czy na pewno chcesz wyjść?', name: 'Nazwa', unit: 'Jedn.', nominal: 'Nominał', min: 'Min', max: 'Max', arrows: 'Strzałki', addArrow: 'Dodaj strzałkę', arrowWidth: 'Szerokość', arrowColor: 'Kolor', arrowHead: 'Grot', columns: 'Kolumny', addColumn: 'Dodaj kolumnę', setView: 'Ustaw Widok', clearView: 'Wyczyść Widok', confirmDeleteRecord: "Czy na pewno chcesz usunąć ten rekord?", exportPNG: "Eksportuj PNG", actions: "Akcje", renameColumn: 'Zmień nazwę', applyFormula: 'Zastosuj formułę...', deleteColumn: 'Usuń kolumnę' },
+        de: { projectFolder: 'Projektordner', editSchema: 'Schema bearbeiten', newSchema: 'Neues Schema', dbViewer: 'DB-Ansicht', analysis: 'Analyse', qrCode: 'QR-Code', schemaName: 'Schemaname', schemaVersion: 'Schemaversion', drawingBackground: 'Zeichnungshintergrund', metaLabels: 'Meta-Labels', showQR: 'QR anzeigen', showDate: 'Datum anzeigen', selectMapPrompt: 'Wählen Sie ein Schema, um zu beginnen.', comment: 'Kommentar', save: 'Speichern', saveSuccess: 'Gespeichert!', map: 'Schema', deleteSchema: 'Schema löschen', confirmDelete: 'Sind Sie sicher, dass Sie dieses Schema löschen möchten?', deleteSuccess: 'Schema gelöscht.', deleteError: 'Fehler beim Löschen des Schemas.', schemaInfoMissing: 'Schemaname und -version sind erforderlich.', saveError: 'Fehler beim Speichern.', exportSuccess: 'Export erfolgreich!', confirmExitEditor: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie den Editor verlassen möchten?', name: 'Name', unit: 'Einheit', nominal: 'Nominal', min: 'Min', max: 'Max', arrows: 'Pfeile', addArrow: 'Pfeil hinzufügen', arrowWidth: 'Breite', arrowColor: 'Farbe', arrowHead: 'Spitze', columns: 'Spalten', addColumn: 'Spalte hinzufügen', setView: 'Ansicht festlegen', clearView: 'Ansicht löschen', confirmDeleteRecord: "Möchten Sie diesen Datensatz wirklich löschen?", exportPNG: "PNG exportieren", actions: "Aktionen", renameColumn: 'Spalte umbenennen', applyFormula: 'Formel anwenden...', deleteColumn: 'Spalte löschen' },
     };
     const t = (key) => translations[appState.ui.language]?.[key] || key;
     const formatNumber = (num, digits = 3) => {
@@ -763,9 +763,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Load and display a background image
-     * @param {string} bgFilename - Background filename
-     * @param {Object} options - Options
+     * @param {string} bgFilename - Background filename from backgrounds directory
+     * @param {Object} options - Loading options
      * @param {boolean} options.sync - Wait for image to load before returning
+     * @returns {Promise<void>}
+     * @throws {Error} If background file not found or failed to load (only in sync mode)
      */
     const loadAndDisplayBackground = async (bgFilename, { sync = false } = {}) => {
         console.log(`🔍 Attempting to load background${sync ? ' (sync)' : ''}: ${bgFilename}`);
@@ -2059,8 +2061,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
    
+    /**
+     * Add a new measurement point to the editor
+     * Creates a new point with default values and inherits background from selected point
+     * @returns {void}
+     */
     const addMP = () => {
-        if (!appState.ui.isEditorOpen) return;
+        if (!appState.ui.isEditorOpen) {
+            console.warn('⚠️ Cannot add MP: editor not open');
+            return;
+        }
+        
+        if (!appState.ui.editorState?.points) {
+            console.error('❌ Cannot add MP: invalid editor state');
+            return;
+        }
         
         const points = appState.ui.editorState.points;
         const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, ''), 10) || 0)) + 1)}`;
@@ -2124,6 +2139,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] DATA SAVING & EXPORT
     // =========================================
+    /**
+     * Save the current map/schema to file
+     * Validates schema name and version, then saves to maps directory
+     * @returns {Promise<void>}
+     * @throws {Error} If file operations fail
+     */
     const saveMap = async () => {
         const { name, version } = appState.ui.editorState;
         if (!name || !version) { alert(t('schemaInfoMissing')); return; }
@@ -2157,9 +2178,10 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.mapSelect.value = fn;
             await handleMapSelect({target: {value: fn}});
             toggleEditor(false);
-        } catch (e) {
-            console.error(e);
-            alert(t('saveError'));
+            console.log(`✅ Map saved: ${fn}`);
+        } catch (error) {
+            console.error('❌ Error saving map:', error);
+            alert(`${t('saveError')}\n\nDetails: ${error.message}`);
         }
     };
    
