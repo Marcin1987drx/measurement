@@ -179,7 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // ✅ FIX: ALWAYS set zoom - either from mp.view OR reset to 1x
                 if (mp.view && mp.view.scale) {
-                    console.log(`📐 Loading saved view for ${id}: scale=${mp.view.scale.toFixed(2)}x`);
+                    console.log(`📐 APPLYING saved view for ${id}:`, {
+                        scale: mp.view.scale.toFixed(3),
+                        offsetX: mp.view.offsetX.toFixed(1),
+                        offsetY: mp.view.offsetY.toFixed(1),
+                        containerSize: `${dom.canvasWrapper.offsetWidth}x${dom.canvasWrapper.offsetHeight}`
+                    });
                     applyCanvasZoom(mp.view, false); // No animation for precise positioning
                 } else {
                     console.log(`📐 No saved view for ${id}, resetting to 1x zoom`);
@@ -256,6 +261,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] ZOOM & VIEW MANAGEMENT
     // =========================================
+    /**
+     * Apply zoom and pan transformation to canvas layers
+     * 
+     * COORDINATE SYSTEM GUARANTEE:
+     * - All layers (background, SVG, labels) use transform-origin: 0 0 (top-left)
+     * - Transform formula: translate(offsetX, offsetY) scale(scale)
+     * - offsetX, offsetY are in SCREEN PIXELS (post-scale translation)
+     * - scale is the zoom factor (1.0 = 100%, 2.0 = 200%, etc.)
+     * - This ensures that saved views are deterministic and reversible:
+     *   saving a view and reapplying it will restore the EXACT same visual composition
+     * 
+     * @param {Object} view - View object with {scale, offsetX, offsetY}
+     * @param {boolean} animate - Whether to animate the transition
+     */
     const applyCanvasZoom = (view, animate = true) => {
         if (!view || !view.scale) {
             resetCanvasView(animate);
@@ -267,7 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.ui.isZoomActive = scale !== 1 || offsetX !== 0 || offsetY !== 0;
         appState.ui.currentMPView = view;
 
-        const transform = `scale(${scale}) translate(${offsetX}px, ${offsetY}px)`;
+        // ✅ FIXED: With transform-origin: 0 0 (top-left), use translate-then-scale
+        // This ensures consistent behavior: pan in screen coords, then scale from top-left
+        // Formula: translate(panX, panY) scale(s)
+        const transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
         
         const transitionStyle = animate ? '' : 'none';
         dom.backgroundImg.style.transition = transitionStyle;
@@ -353,9 +375,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.overlaySvg.style.transition = transitionStyle;
         dom.labelsContainer.style.transition = transitionStyle;
 
-        dom.backgroundImg.style.transform = 'scale(1) translate(0px, 0px)';
-        dom.overlaySvg.style.transform = 'scale(1) translate(0px, 0px)';
-        dom.labelsContainer.style.transform = 'scale(1) translate(0px, 0px)';
+        dom.backgroundImg.style.transform = 'translate(0px, 0px) scale(1)';
+        dom.overlaySvg.style.transform = 'translate(0px, 0px) scale(1)';
+        dom.labelsContainer.style.transform = 'translate(0px, 0px) scale(1)';
 
         // Inverse scaling reset
         const elementsToScale = dom.labelsContainer.querySelectorAll('.mp-label, .meta-label, .resizing-handle');
@@ -444,8 +466,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let newScale = oldScale * delta;
         newScale = Math.max(0.5, Math.min(5, newScale));
         
-        const newOffsetX = appState.ui.canvasZoom.offsetX - (x - rect.width / 2) * (newScale / oldScale - 1);
-        const newOffsetY = appState.ui.canvasZoom.offsetY - (y - rect.height / 2) * (newScale / oldScale - 1);
+        // ✅ FIXED: With top-left origin, zoom around cursor position (x, y)
+        // The point (x, y) in screen coords should stay visually fixed during zoom
+        // Current point in viewBox: (x - offsetX) / scale
+        // After zoom: this same viewBox point should appear at screen position (x, y)
+        // New offset: x - viewBoxPoint * newScale = x - (x - offsetX) * newScale / oldScale
+        const newOffsetX = x - (x - appState.ui.canvasZoom.offsetX) * newScale / oldScale;
+        const newOffsetY = y - (y - appState.ui.canvasZoom.offsetY) * newScale / oldScale;
 
         appState.ui.canvasZoom.scale = newScale;
         appState.ui.canvasZoom.offsetX = newOffsetX;
@@ -1667,10 +1694,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // ✅ FIXED: Reset zoom based on MP's saved view
                 if (mp.view && mp.view.scale) {
-                    console.log(`🔍 Applying saved view for ${mp.id} in editor`);
+                    console.log(`🔍 EDITOR: Applying saved view for ${mp.id}:`, {
+                        scale: mp.view.scale.toFixed(3),
+                        offsetX: mp.view.offsetX.toFixed(1),
+                        offsetY: mp.view.offsetY.toFixed(1)
+                    });
                     applyCanvasZoom(mp.view, false);
                 } else {
-                    console.log(`🔍 Resetting view for ${mp.id} (no saved view)`);
+                    console.log(`🔍 EDITOR: Resetting view for ${mp.id} (no saved view)`);
                     resetCanvasView(false, false); // Reset without animation, keep selection
                 }
                 
@@ -1736,6 +1767,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     offsetY: appState.ui.canvasZoom.offsetY 
                 };
                 appState.ui.editorIsDirty = true;
+                console.log(`📸 VIEW SAVED for ${mp.id}:`, {
+                    scale: mp.view.scale.toFixed(3),
+                    offsetX: mp.view.offsetX.toFixed(1),
+                    offsetY: mp.view.offsetY.toFixed(1),
+                    currentCanvasZoom: appState.ui.canvasZoom
+                });
                 alert(`View saved for ${mp.id}!\nScale: ${mp.view.scale.toFixed(2)}x`);
                 renderSchemaInspector();
             }
