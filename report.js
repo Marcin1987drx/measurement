@@ -17,6 +17,10 @@ const reportState = {
         gridEnabled: true,
         snapEnabled: true
     },
+    // Problem #4: Track chart instances for cleanup to prevent memory leaks
+    chartInstances: new Map(),
+    // Problem #2: Track timeouts for cancellation to prevent race conditions
+    pendingTimeouts: new Set(),
     template: {
         meta: { name: 'Untitled Report', paper: 'A4', orientation: 'portrait' },
         pages: [{ id: 1, components: [] }],
@@ -180,6 +184,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('✅ Report Studio ready!');
 });
+
+// Problem #8: Helper function to escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
 
 function initializeTheme() {
     const isDark = window.themeManager.load();
@@ -957,15 +969,16 @@ function renderMeasurementTable(measurements) {
         const statusColor = m.Status === 'OK' ? '#34c759' : '#ff3b30';
         const rowBg = index % 2 === 0 ? 'var(--bg-secondary)' : 'transparent';
         
+        // Problem #8: Use escapeHtml to prevent XSS
         html += `<tr style="background:${rowBg};">`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;font-family:monospace;font-weight:600;">${m.MP_ID}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;">${m.Name || m.MP_ID}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;font-weight:bold;color:var(--text-primary);">${m.Value}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;font-size:10px;color:var(--text-secondary);">${m.Unit}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:var(--text-secondary);">${m.Nominal}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff9500;">${m.Min}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff3b30;">${m.Max}</td>`;
-        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;color:${statusColor};font-weight:bold;font-size:12px;">${statusIcon} ${m.Status}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;font-family:monospace;font-weight:600;">${escapeHtml(m.MP_ID)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;">${escapeHtml(m.Name || m.MP_ID)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;font-weight:bold;color:var(--text-primary);">${escapeHtml(m.Value)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;font-size:10px;color:var(--text-secondary);">${escapeHtml(m.Unit)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:var(--text-secondary);">${escapeHtml(m.Nominal)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff9500;">${escapeHtml(m.Min)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:right;color:#ff3b30;">${escapeHtml(m.Max)}</td>`;
+        html += `<td style="border:1px solid var(--border-color);padding:6px;text-align:center;color:${statusColor};font-weight:bold;font-size:12px;">${statusIcon} ${escapeHtml(m.Status)}</td>`;
         html += '</tr>';
     });
     
@@ -1302,8 +1315,9 @@ function renderPointViewImages(record, config = {}) {
     
     html += '</div>';
     
-    // Schedule async image load and event listeners
-    setTimeout(async () => {
+    // Problem #2: Schedule async image load and event listeners with timeout tracking
+    const timeoutId = setTimeout(async () => {
+        reportState.pendingTimeouts.delete(timeoutId);
         const fs = window.fileSystemAdapter;
         
         // Check if file system is available
@@ -1369,6 +1383,7 @@ function renderPointViewImages(record, config = {}) {
         
         console.log(`✅ Finished loading ${measurements.length} point view images`);
     }, 100);
+    reportState.pendingTimeouts.add(timeoutId);
     
     return html;
 }

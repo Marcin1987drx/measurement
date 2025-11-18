@@ -288,10 +288,26 @@ class FileSystemAdapter {
     }
 
     async writeLocal(path, data) {
-        const handle = await this.getHandle(path, true);
-        const writable = await handle.createWritable();
-        await writable.write(data);
-        await writable.close();
+        // Problem #6: Add try-catch with proper cleanup
+        let writable = null;
+        try {
+            const handle = await this.getHandle(path, true);
+            writable = await handle.createWritable();
+            await writable.write(data);
+            await writable.close();
+            console.log(`✅ Successfully wrote file: ${path}`);
+        } catch (error) {
+            console.error(`❌ Error writing file ${path}:`, error);
+            // Ensure writable is closed even on error
+            if (writable) {
+                try {
+                    await writable.abort();
+                } catch (abortError) {
+                    console.error(`❌ Error aborting writable for ${path}:`, abortError);
+                }
+            }
+            throw error; // Re-throw to caller
+        }
     }
 
     async readServer(path) {

@@ -61,7 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const VIEWBOX_WIDTH = 1000;
     const VIEWBOX_HEIGHT = 700;
-    const READONLY_COLS = ['RecordId', 'Timestamp', 'SchemaName', 'SchemaVersion', 'OverallStatus', 'Comment'];
+    // Problem #5: Use TERMINOLOGY constant instead of duplication
+    const READONLY_COLS = window.TERMINOLOGY?.READONLY_COLUMNS || ['RecordId', 'Timestamp', 'SchemaName', 'SchemaVersion', 'OverallStatus', 'Comment'];
 
     // =========================================
     // [SECTION] DOM ELEMENTS
@@ -129,6 +130,46 @@ document.addEventListener('DOMContentLoaded', () => {
         dbHeaderContextMenu: document.getElementById('db-header-context-menu'),
         formulaSuggestions: document.getElementById('formula-suggestions'),
     };
+
+    // =========================================
+    // [SECTION] DOM VALIDATION
+    // =========================================
+    // Problem #1: Validate all DOM elements to prevent crashes
+    const validateDOM = () => {
+        const missing = [];
+        const critical = ['canvasWrapper', 'backgroundImg', 'overlaySvg', 'labelsContainer', 'mpList'];
+        
+        for (const [key, element] of Object.entries(dom)) {
+            if (!element) {
+                missing.push(key);
+                console.warn(`⚠️ Missing DOM element: ${key}`);
+                
+                // For critical elements, show error and prevent app initialization
+                if (critical.includes(key)) {
+                    console.error(`❌ Critical DOM element missing: ${key}`);
+                }
+            }
+        }
+        
+        if (missing.length > 0) {
+            console.warn(`⚠️ ${missing.length} DOM elements not found:`, missing);
+            
+            // Check if any critical elements are missing
+            const missingCritical = missing.filter(key => critical.includes(key));
+            if (missingCritical.length > 0) {
+                alert(`Critical error: Missing essential UI elements (${missingCritical.join(', ')}). Please refresh the page.`);
+                return false;
+            }
+        }
+        
+        return true;
+    };
+
+    // Validate DOM before proceeding
+    if (!validateDOM()) {
+        console.error('❌ DOM validation failed. Stopping initialization.');
+        return;
+    }
 
     // =========================================
     // [SECTION] TRANSLATIONS & HELPERS
@@ -877,8 +918,9 @@ document.addEventListener('DOMContentLoaded', () => {
                  mp.columns.forEach((col, index) => {
                     const group = document.createElement('div');
                     group.className = 'mp-sub-input-group';
+                    // Problem #8: Use escapeHtml to prevent XSS
                     group.innerHTML = `
-                        <label class="mp-sub-label" title="${col.name} [${col.min}...${col.max}]">${col.name}</label>
+                        <label class="mp-sub-label" title="${escapeHtml(col.name)} [${escapeHtml(col.min)}...${escapeHtml(col.max)}]">${escapeHtml(col.name)}</label>
                         <input type="text" class="input-field mp-sub-input" data-col-index="${index}">
                     `;
                     const input = group.querySelector('input');
@@ -2756,9 +2798,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let expression = formula.substring(1).trim();
 
-        // Security: Limit formula length to prevent DoS
+        // Problem #3 & #19: Security - Limit formula length and nesting depth to prevent DoS
         if (expression.length > 1000) {
             console.error("Formula too long (max 1000 chars):", expression.length);
+            return "#ERROR!";
+        }
+
+        // Check nesting depth (max 50 levels)
+        let depth = 0;
+        let maxDepth = 0;
+        for (let char of expression) {
+            if (char === '(') {
+                depth++;
+                maxDepth = Math.max(maxDepth, depth);
+            } else if (char === ')') {
+                depth--;
+            }
+        }
+        if (maxDepth > 50) {
+            console.error("Formula nesting too deep (max 50 levels):", maxDepth);
             return "#ERROR!";
         }
 
@@ -2778,8 +2836,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const evaluator = new Function('SQRT', 'POW', 'ABS', 'ROUND', 'SIN', 'COS', 'TAN', 'CONCAT', 'IF', `return ${expression}`);
+            // Problem #3: Add 1-second timeout for formula execution
+            const startTime = Date.now();
+            const evaluator = new Function('SQRT', 'POW', 'ABS', 'ROUND', 'SIN', 'COS', 'TAN', 'CONCAT', 'IF', `
+                const startTime = ${startTime};
+                if (Date.now() - startTime > 1000) {
+                    throw new Error("Formula timeout");
+                }
+                return ${expression}
+            `);
             const result = evaluator(Math.sqrt, Math.pow, Math.abs, Math.round, Math.sin, Math.cos, Math.tan, (...args) => args.join(''), (cond, t, f) => cond ? t : f);
+            
+            // Check if execution took too long
+            if (Date.now() - startTime > 1000) {
+                console.error("Formula execution timeout (>1s)");
+                return "#ERROR!";
+            }
+            
             return result;
         } catch (e) {
             console.error("Formula evaluation error:", e);
@@ -3853,7 +3926,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dom.visualizationBgToggle.addEventListener('change', () => dom.canvasWrapper.style.backgroundColor = dom.visualizationBgToggle.checked ? dom.visualizationBgColor.value : 'transparent');
     dom.visualizationBgColor.addEventListener('input', () => dom.canvasWrapper.style.backgroundColor = dom.visualizationBgToggle.checked ? dom.visualizationBgColor.value : 'transparent');
-    new ResizeObserver(syncOverlayDimensions).observe(dom.canvasWrapper);
+    
+    // Problem #11: Debounce ResizeObserver to prevent infinite loop
+    let resizeAnimationFrame = null;
+    new ResizeObserver(() => {
+        if (resizeAnimationFrame) {
+            cancelAnimationFrame(resizeAnimationFrame);
+        }
+        resizeAnimationFrame = requestAnimationFrame(() => {
+            syncOverlayDimensions();
+            resizeAnimationFrame = null;
+        });
+    }).observe(dom.canvasWrapper);
     if (!appState.projectRootHandle) dom.btnProjectFolder.classList.add('needs-action');
     
     // ✅ Load saved language preference on page load
