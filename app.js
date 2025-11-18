@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Wait for background to load before applying zoom
                 if (bgFileName) {
-                    await loadAndDisplayBackgroundSync(bgFileName);
+                    await loadAndDisplayBackground(bgFileName, { sync: true });
                 }
                 
                 // ✅ FIX: ALWAYS set zoom - either from mp.view OR reset to 1x
@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const mapData = JSON.parse(await readFile(mapHandle));
                     mapData.fileName = key;
-                    // DATA MIGRATION V1.0 -> V1.1
+                    // Ensure data integrity
                     mapData.points.forEach(mp => {
                         if (!mp.arrows) {
                              mp.arrows = [{ x1: mp.x1, y1: mp.y1, x2: mp.x2, y2: mp.y2, style: mp.style }];
@@ -713,7 +713,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!mp.type) {
                             mp.type = 'single';
                         }
-                        // Ensure view property exists
                         if (!mp.view) {
                             mp.view = null;
                         }
@@ -757,69 +756,55 @@ document.addEventListener('DOMContentLoaded', () => {
         renderCanvas();
     };
 
-    const loadAndDisplayBackground = async (bgFilename) => {
-        console.log(`🔍 Attempting to load background: ${bgFilename}`);
-        dom.backgroundImg.src = '';
-        if (!bgFilename) {
-            console.warn('⚠️ No background filename provided');
-            return;
-        }
-        const bgHandle = appState.fileHandles.backgrounds[bgFilename];
-        if (!bgHandle) {
-            console.error(`❌ Background file handle not found for: ${bgFilename}`);
-            console.log('Available backgrounds:', Object.keys(appState.fileHandles.backgrounds));
-            return;
-        }
-        try {
-            const file = await bgHandle.getFile();
-            const url = URL.createObjectURL(file);
-            dom.backgroundImg.src = url;
-            dom.backgroundImg.style.display = 'block';
-            dom.backgroundImg.onload = () => {
-                console.log(`✅ Background image loaded and displayed: ${bgFilename}`);
-                renderCanvas();
-            };
-        } catch (err) { 
-            console.error(`❌ Error loading background ${bgFilename}:`, err); 
-        }
-    };
-
     /**
-     * Load and display background synchronously (returns a Promise)
-     * This ensures background is fully loaded before zoom/render operations
+     * Load and display a background image
+     * @param {string} bgFilename - Background filename
+     * @param {Object} options - Options
+     * @param {boolean} options.sync - Wait for image to load before returning
      */
-    const loadAndDisplayBackgroundSync = async (bgFilename) => {
-        console.log(`🔍 Attempting to load background synchronously: ${bgFilename}`);
+    const loadAndDisplayBackground = async (bgFilename, { sync = false } = {}) => {
+        console.log(`🔍 Attempting to load background${sync ? ' (sync)' : ''}: ${bgFilename}`);
         dom.backgroundImg.src = '';
+        
         if (!bgFilename) {
             console.warn('⚠️ No background filename provided');
             return;
         }
+        
         const bgHandle = appState.fileHandles.backgrounds[bgFilename];
         if (!bgHandle) {
             console.error(`❌ Background file handle not found for: ${bgFilename}`);
             console.log('Available backgrounds:', Object.keys(appState.fileHandles.backgrounds));
             return;
         }
+        
         try {
             const file = await bgHandle.getFile();
             const url = URL.createObjectURL(file);
             dom.backgroundImg.src = url;
             dom.backgroundImg.style.display = 'block';
             
-            // Wait for image to load before returning
-            await new Promise((resolve, reject) => {
+            if (sync) {
+                // Wait for image to load before returning
+                await new Promise((resolve, reject) => {
+                    dom.backgroundImg.onload = () => {
+                        console.log(`✅ Background loaded: ${bgFilename}`);
+                        resolve();
+                    };
+                    dom.backgroundImg.onerror = () => {
+                        reject(new Error(`Failed to load background: ${bgFilename}`));
+                    };
+                });
+            } else {
+                // Async loading with callback
                 dom.backgroundImg.onload = () => {
-                    console.log(`✅ Background image loaded synchronously: ${bgFilename}`);
-                    resolve();
+                    console.log(`✅ Background loaded: ${bgFilename}`);
+                    renderCanvas();
                 };
-                dom.backgroundImg.onerror = () => {
-                    reject(new Error(`Failed to load background: ${bgFilename}`));
-                };
-            });
+            }
         } catch (err) { 
-            console.error(`❌ Error loading background ${bgFilename}:`, err); 
-            throw err;
+            console.error(`❌ Error loading background ${bgFilename}:`, err);
+            if (sync) throw err;
         }
     };
 
@@ -1696,7 +1681,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Wait for background to load before applying zoom
                 if (bgFileName) {
-                    await loadAndDisplayBackgroundSync(bgFileName);
+                    await loadAndDisplayBackground(bgFileName, { sync: true });
                 }
                 
                 // ✅ FIXED: Reset zoom based on MP's saved view
@@ -2385,14 +2370,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (!backgroundFileName) {
-                console.error('❌ No background configured for export');
-                return reject("Schema has no background configured");
+                const error = '❌ No background configured for schema';
+                console.error(error);
+                alert('Schema nie ma skonfigurowanego tła. Proszę edytować schemat i dodać obraz tła.');
+                return reject(error);
             }
             
             const bgH = appState.fileHandles.backgrounds[backgroundFileName];
             if (!bgH) {
-                console.error(`❌ Background file handle not found: ${backgroundFileName}`);
-                return reject(`Background file not found: ${backgroundFileName}`);
+                const error = `❌ Background file "${backgroundFileName}" not found in project`;
+                console.error(error);
+                alert(`Plik tła "${backgroundFileName}" nie istnieje w projekcie.`);
+                return reject(error);
             }
             const img = new Image();
             const bgUrl = URL.createObjectURL(await bgH.getFile());
@@ -2698,140 +2687,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // AUTO-GENERATE ZOOM IMAGES FROM OVERVIEW + SCHEMA VIEW COORDINATES (OLD)
     // ═════════════════════════════════════════════════════════════════════════════
 
-    async function generateZoomImages(qrCode, schemaName) {
-        console.log(`🔍 Starting zoom generation: QR=${qrCode}, Schema=${schemaName}`);
-        
-        try {
-            // 1. Get visualization directory
-            const exportsDir = await getOrCreateDir(appState.projectRootHandle, 'exports');
-            const vizDir = await getOrCreateDir(exportsDir, 'visualizations');
-            
-            // 2. Load overview image
-            const overviewHandle = await vizDir.getFileHandle(`${qrCode}.png`).catch(() => null);
-            if (!overviewHandle) {
-                console.warn(`⚠️ Overview not found: ${qrCode}.png`);
-                return;
-            }
-            
-            const overviewFile = await overviewHandle.getFile();
-            const overviewImage = await loadImageFromFile(overviewFile);
-            console.log(`✅ Overview loaded: ${overviewImage.width}x${overviewImage.height}`);
-            
-            // 3. Load schema
-            const mapsDir = await getOrCreateDir(appState.projectRootHandle, 'maps');
-            const schemaHandle = await mapsDir.getFileHandle(`${schemaName}.map.json`).catch(() => null);
-            if (!schemaHandle) {
-                console.warn(`⚠️ Schema not found: ${schemaName}.map.json`);
-                return;
-            }
-            
-            const schemaFile = await schemaHandle.getFile();
-            const schemaText = await schemaFile.text();
-            const schema = JSON.parse(schemaText);
-            
-            if (!schema.points || schema.points.length === 0) {
-                console.warn('⚠️ No points in schema');
-                return;
-            }
-            
-            console.log(`✅ Schema loaded: ${schema.points.length} MPs`);
-            
-            // 4. Generate zoom for each MP with view coords
-            let generated = 0;
-            
-            for (const mp of schema.points) {
-                if (!mp.view || !mp.view.scale) {
-                    console.log(`⏭️ Skip ${mp.id} (no view)`);
-                    continue;
-                }
-                
-                console.log(`🔍 Processing ${mp.id} (scale: ${mp.view.scale.toFixed(2)})`);
-                
-                // Crop image
-                const zoomCanvas = cropImageByView(overviewImage, mp.view);
-                
-                // Convert to blob
-                const blob = await canvasToBlob(zoomCanvas);
-                
-                // Save file
-                const filename = `${qrCode}_${mp.id}.png`;
-                const fileHandle = await vizDir.getFileHandle(filename, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                
-                console.log(`✅ Saved: ${filename}`);
-                generated++;
-            }
-            
-            console.log(`✅ Generated ${generated} zoom images`);
-            
-        } catch (error) {
-            console.error('❌ Zoom generation error:', error);
-        }
-    }
-
-    function cropImageByView(sourceImage, view) {
-        const { scale, offsetX, offsetY } = view;
-        
-        // Target canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 600;
-        const ctx = canvas.getContext('2d');
-        
-        // Calculate crop region
-        const imgW = sourceImage.width;
-        const imgH = sourceImage.height;
-        
-        const centerX = imgW / 2 + (offsetX || 0);
-        const centerY = imgH / 2 + (offsetY || 0);
-        
-        const cropW = imgW / scale;
-        const cropH = imgH / scale;
-        
-        const cropX = centerX - cropW / 2;
-        const cropY = centerY - cropH / 2;
-        
-        // Draw cropped
-        ctx.drawImage(
-            sourceImage,
-            cropX, cropY, cropW, cropH,
-            0, 0, 800, 600
-        );
-        
-        return canvas;
-    }
-
-    function loadImageFromFile(file) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            const url = URL.createObjectURL(file);
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                resolve(img);
-            };
-            img.onerror = () => {
-                URL.revokeObjectURL(url);
-                reject(new Error('Image load failed'));
-            };
-            img.src = url;
-        });
-    }
-
-    function canvasToBlob(canvas) {
-        return new Promise(resolve => {
-            canvas.toBlob(blob => resolve(blob), 'image/png');
-        });
-    }
-
     // =========================================
     // [SECTION] FORMULA ENGINE
     // =========================================
+    /**
+     * Evaluate a formula with security checks
+     * @param {string} formula - Formula starting with '='
+     * @param {Object} rowData - Data context for column references
+     * @returns {string|number} - Evaluated result or '#ERROR!'
+     */
     const evaluateFormula = (formula, rowData) => {
         if (!formula.startsWith('=')) return formula;
 
         let expression = formula.substring(1).trim();
+
+        // Security: Limit formula length to prevent DoS
+        if (expression.length > 1000) {
+            console.error("Formula too long (max 1000 chars):", expression.length);
+            return "#ERROR!";
+        }
 
         expression = expression.replace(/\[(.*?)\]/g, (match, colName) => {
             const val = rowData[colName.trim()];
@@ -3034,13 +2908,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         popup.classList.remove('visible');
         
-        // Wait for fade-out animation before hiding
-        setTimeout(() => {
+        // Use requestAnimationFrame for better responsiveness
+        requestAnimationFrame(() => {
             // Double-check state hasn't changed
             if (!appState.ui.formulaSuggestions.visible) {
                 popup.style.display = 'none';
             }
-        }, 200); // Match CSS transition duration
+        });
     };
 
     /**
