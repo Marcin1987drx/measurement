@@ -763,9 +763,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Load and display a background image
-     * @param {string} bgFilename - Background filename
-     * @param {Object} options - Options
+     * @param {string} bgFilename - Background filename from backgrounds directory
+     * @param {Object} options - Loading options
      * @param {boolean} options.sync - Wait for image to load before returning
+     * @returns {Promise<void>}
+     * @throws {Error} If background file not found or failed to load (only in sync mode)
      */
     const loadAndDisplayBackground = async (bgFilename, { sync = false } = {}) => {
         console.log(`🔍 Attempting to load background${sync ? ' (sync)' : ''}: ${bgFilename}`);
@@ -2059,8 +2061,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
    
+    /**
+     * Add a new measurement point to the editor
+     * Creates a new point with default values and inherits background from selected point
+     * @returns {void}
+     */
     const addMP = () => {
-        if (!appState.ui.isEditorOpen) return;
+        if (!appState.ui.isEditorOpen) {
+            console.warn('⚠️ Cannot add MP: editor not open');
+            return;
+        }
+        
+        if (!appState.ui.editorState?.points) {
+            console.error('❌ Cannot add MP: invalid editor state');
+            return;
+        }
         
         const points = appState.ui.editorState.points;
         const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, ''), 10) || 0)) + 1)}`;
@@ -2124,6 +2139,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
     // [SECTION] DATA SAVING & EXPORT
     // =========================================
+    /**
+     * Save the current map/schema to file
+     * Validates schema name and version, then saves to maps directory
+     * @returns {Promise<void>}
+     * @throws {Error} If file operations fail
+     */
     const saveMap = async () => {
         const { name, version } = appState.ui.editorState;
         if (!name || !version) { alert(t('schemaInfoMissing')); return; }
@@ -2157,9 +2178,10 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.mapSelect.value = fn;
             await handleMapSelect({target: {value: fn}});
             toggleEditor(false);
-        } catch (e) {
-            console.error(e);
-            alert(t('saveError'));
+            console.log(`✅ Map saved: ${fn}`);
+        } catch (error) {
+            console.error('❌ Error saving map:', error);
+            alert(`${t('saveError')}\n\nDetails: ${error.message}`);
         }
     };
    

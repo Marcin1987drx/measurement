@@ -234,6 +234,12 @@ class FileSystemAdapter {
         return this.mode === 'local' ? this.writeLocal(path, data) : this.writeServer(path, data);
     }
 
+    /**
+     * Get URL for an image file (creates blob URL for local mode, returns API URL for server mode)
+     * Automatically manages blob URL lifecycle to prevent memory leaks
+     * @param {string} path - Path to the image file
+     * @returns {Promise<string>} URL to the image (blob URL or server API URL)
+     */
     async getImageURL(path) {
         if (this.mode === 'local') {
             // Revoke previous URL for this path if it exists
