@@ -281,6 +281,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // ✅ Defensive check: ensure container has valid dimensions
+        const containerRect = dom.canvasWrapper.getBoundingClientRect();
+        if (containerRect.width === 0 || containerRect.height === 0) {
+            console.warn('⚠️ Cannot apply zoom: container has no dimensions');
+            return;
+        }
+
         const { scale, offsetX, offsetY } = view;
         appState.ui.canvasZoom = { scale, offsetX, offsetY };
         appState.ui.isZoomActive = scale !== 1 || offsetX !== 0 || offsetY !== 0;
@@ -2401,6 +2408,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     cv.width = 800;  // Standard output size
                     cv.height = 600;
                     ctx = cv.getContext('2d');
+                    
+                    // NOTE: This calculation assumes center-based view offsets from the old system.
+                    // With the new top-left transform-origin system, view.offsetX/offsetY are now
+                    // pan translations in screen pixels. This export logic may need adjustment
+                    // if zoom exports don't match the on-screen view after the transform changes.
+                    // TODO: Verify and update if needed after testing.
                     
                     // Calculate crop region based on view
                     const centerX = nw / 2 + (view.offsetX || 0);
