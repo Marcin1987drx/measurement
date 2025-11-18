@@ -54,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
             labelUpdateScheduled: false,
             dbHeaderContextMenu: { visible: false, target: null, x: 0, y: 0 },
             dbDraggedColumnIndex: -1,
-            formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null }
+            formulaSuggestions: { visible: false, items: [], activeIndex: -1, targetCell: null },
+            currentBackgroundUrl: null  // Track current background blob URL for cleanup
         }
     };
 
@@ -681,10 +682,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.ui.logoImage = img;
                 dom.headerLogo.src = url;
                 dom.headerLogo.style.display = 'block';
+                // Revoke the blob URL after the image has loaded to prevent memory leaks
+                URL.revokeObjectURL(url);
             };
             img.onerror = () => {
                 appState.ui.logoImage = null;
                 dom.headerLogo.style.display = 'none';
+                // Revoke the blob URL even on error to prevent memory leaks
+                URL.revokeObjectURL(url);
             };
             img.src = url;
         } catch (err) {
@@ -779,8 +784,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
+            // Revoke the previous background URL to prevent memory leaks
+            if (appState.ui.currentBackgroundUrl) {
+                URL.revokeObjectURL(appState.ui.currentBackgroundUrl);
+                appState.ui.currentBackgroundUrl = null;
+            }
+            
             const file = await bgHandle.getFile();
             const url = URL.createObjectURL(file);
+            appState.ui.currentBackgroundUrl = url;
             dom.backgroundImg.src = url;
             dom.backgroundImg.style.display = 'block';
             
@@ -3785,6 +3797,8 @@ document.addEventListener('DOMContentLoaded', () => {
             a.href=URL.createObjectURL(new Blob([serializeCSV(Object.keys(d[0]), d)], {type:'text/csv'}));
             a.download='analysis_export.csv';
             a.click();
+            // Revoke the blob URL after triggering download to prevent memory leaks
+            URL.revokeObjectURL(a.href);
         } else alert("No data");
     });
     dom.chartResetViewBtn.addEventListener('click', () => {
