@@ -317,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.ui.selectedMPId = null;  // ✅ Clear selected MP only if requested
         }
         
-        // Reset to global background in measurement mode (only if clearing selection)
+        // ✅ FIXED: In editor mode, DON'T change background on reset - only reset zoom
+        // In measurement mode, reset to global background only if clearing selection
         if (clearSelection && !appState.ui.isEditorOpen && appState.data.currentMap && appState.data.currentMap.meta) {
             const meta = appState.data.currentMap.meta;
             if (meta.globalBackground && meta.backgrounds) {
@@ -327,6 +328,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadAndDisplayBackground(globalBg.fileName);
                 }
             }
+        } else if (appState.ui.isEditorOpen && appState.ui.selectedMPId) {
+            console.log(`🔄 Resetting zoom only (staying on current background in editor)`);
+            // Background remains unchanged - only zoom is reset
         }
         
         const transitionStyle = animate ? '' : 'none';
@@ -1609,7 +1613,32 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then handle button actions
             const act = e.target.dataset.action; if (!act) return;
             if (act === 'delete-mp') { if (confirm(`Delete ${mp.id}?`)) deleteMP(mp.id); }
-            else if (act === 'add-arrow') { mp.arrows.push({x1: 400, y1: 300, x2: 500, y2: 300, style: {color: '#ff9500', width: 2, head: 'arrow'}}); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
+            else if (act === 'add-arrow') {
+                // ✅ Calculate center of visible area considering zoom
+                const { scale, offsetX, offsetY } = appState.ui.canvasZoom;
+                
+                // Convert from screen space to viewBox space
+                const centerViewBoxX = VIEWBOX_WIDTH / 2 - (offsetX / scale);
+                const centerViewBoxY = VIEWBOX_HEIGHT / 2 - (offsetY / scale);
+                
+                // Clamp to viewBox boundaries
+                const clampedX = Math.max(50, Math.min(VIEWBOX_WIDTH - 50, centerViewBoxX));
+                const clampedY = Math.max(50, Math.min(VIEWBOX_HEIGHT - 50, centerViewBoxY));
+                
+                console.log(`➕ Adding arrow at visible center: (${clampedX.toFixed(0)}, ${clampedY.toFixed(0)}) [zoom: ${scale.toFixed(2)}x]`);
+                
+                mp.arrows.push({
+                    x1: clampedX - 50,  // ✅ 50px left from center
+                    y1: clampedY, 
+                    x2: clampedX + 50,  // ✅ 50px right from center
+                    y2: clampedY, 
+                    style: {color: '#ff9500', width: 2, head: 'arrow'}
+                }); 
+                
+                appState.ui.editorIsDirty = true; 
+                renderSchemaInspector(); 
+                renderCanvas();
+            }
             else if (act === 'delete-arrow') { const idx = parseInt(e.target.closest('.editor-sub-item')?.dataset.arrowIndex || '0', 10); if (!isNaN(idx)) mp.arrows.splice(idx, 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); renderCanvas(); }
             else if (act === 'add-column') { mp.columns = mp.columns || []; mp.columns.push({name:'New Col', unit:'mm', nominal:0, min:-0.1, max:0.1}); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
             else if (act === 'delete-column') { const idx = parseInt(e.target.closest('.editor-sub-item')?.dataset.colIndex || '0', 10); if (!isNaN(idx)) mp.columns.splice(idx, 1); appState.ui.editorIsDirty = true; renderSchemaInspector(); }
@@ -1888,7 +1917,46 @@ document.addEventListener('DOMContentLoaded', () => {
         resetCanvasView(false);
         const points = appState.ui.editorState.points;
         const newId = `MP${(Math.max(0, ...points.map(p => parseInt(p.id.replace(/\D/g, ''), 10) || 0)) + 1)}`;
-        points.push({ id: newId, name: "New Point", type: 'single', unit: "mm", nominal: 10, min: 9.9, max: 10.1, labelX: 550, labelY: 300, arrows: [{x1: 450, y1: 325, x2: 550, y2: 325, style: { color: '#007aff', width: 2, head: 'arrow' }}], view: null });
+        
+        // ✅ Inherit backgroundId from currently selected MP or use global
+        let newBackgroundId = null;
+        if (appState.ui.selectedMPId) {
+            const selectedMP = points.find(p => p.id === appState.ui.selectedMPId);
+            if (selectedMP) {
+                newBackgroundId = selectedMP.backgroundId || null;
+                console.log(`✨ New point inherits background from ${selectedMP.id}: ${newBackgroundId || 'global'}`);
+            }
+        } else if (appState.ui.editorState.meta.globalBackground) {
+            // If nothing selected, use global (null = global)
+            newBackgroundId = null;
+            console.log(`✨ New point uses global background`);
+        }
+        
+        // ✅ Place arrows in center of screen
+        const centerX = VIEWBOX_WIDTH / 2;  // 500
+        const centerY = VIEWBOX_HEIGHT / 2; // 350
+        
+        points.push({ 
+            id: newId, 
+            name: "New Point", 
+            type: 'single', 
+            unit: "mm", 
+            nominal: 10, 
+            min: 9.9, 
+            max: 10.1, 
+            labelX: centerX + 50, 
+            labelY: centerY - 50, 
+            arrows: [{
+                x1: centerX - 100, 
+                y1: centerY, 
+                x2: centerX, 
+                y2: centerY, 
+                style: { color: '#007aff', width: 2, head: 'arrow' }
+            }], 
+            view: null,
+            backgroundId: newBackgroundId  // ✅ Inherited background
+        });
+        
         appState.ui.editorIsDirty = true;
         renderSchemaInspector();
         selectMP(newId);
