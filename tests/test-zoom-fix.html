@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoom Fix Validation Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-result {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .test-result.pass {
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .test-result.fail {
+            border-left: 4px solid #F44336;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        h2 {
+            color: #555;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        .status {
+            font-weight: bold;
+            font-size: 20px;
+        }
+        
+        .status.pass { color: #4CAF50; }
+        .status.fail { color: #F44336; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Zoom Fix Validation Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function runTests() {
+            const results = [];
+            
+            // Test 1: Verify fitLabelsToView doesn't use inverse scale
+            const test1 = await testFitLabelsToView();
+            results.push(test1);
+            
+            // Test 2: Verify resetCanvasView sets correct transforms
+            const test2 = await testResetCanvasView();
+            results.push(test2);
+            
+            // Test 3: Verify applyCanvasZoom doesn't inverse scale labels
+            const test3 = await testApplyCanvasZoom();
+            results.push(test3);
+            
+            // Display results
+            displayResults(results);
+        }
+        
+        async function testFitLabelsToView() {
+            const response = await fetch('../app.js');
+            const code = await response.text();
+            
+            // Extract fitLabelsToView function
+            const match = code.match(/const fitLabelsToView = \(\) => \{[\s\S]*?\n    \};/);
+            if (!match) {
+                return {
+                    name: 'fitLabelsToView Function Check',
+                    pass: false,
+                    message: 'Could not find fitLabelsToView function'
+                };
+            }
+            
+            const functionBody = match[0];
+            
+            // Check that it doesn't use inverse scale (1/zoom.scale or similar)
+            const hasInverseScale = functionBody.includes('1/zoom.scale') || 
+                                   functionBody.includes('1 / zoom.scale') ||
+                                   functionBody.match(/scale\(\s*1\s*\/\s*[a-zA-Z]/);
+            
+            if (hasInverseScale) {
+                return {
+                    name: 'fitLabelsToView Function Check',
+                    pass: false,
+                    message: 'fitLabelsToView still contains inverse scale logic',
+                    details: 'Labels should not have inverse scale - they should transform WITH the background'
+                };
+            }
+            
+            // Check that it sets transform to 'translate(-50%, -50%)'
+            const hasCenteringTransform = functionBody.includes("transform = 'translate(-50%, -50%)'");
+            
+            if (!hasCenteringTransform) {
+                return {
+                    name: 'fitLabelsToView Function Check',
+                    pass: false,
+                    message: 'fitLabelsToView should set label transform to translate(-50%, -50%)',
+                    details: 'Labels need centering transform only'
+                };
+            }
+            
+            return {
+                name: 'fitLabelsToView Function Check',
+                pass: true,
+                message: 'fitLabelsToView correctly positions labels without inverse scaling',
+                details: '✓ No inverse scale found\n✓ Uses centering transform only'
+            };
+        }
+        
+        async function testResetCanvasView() {
+            const response = await fetch('../app.js');
+            const code = await response.text();
+            
+            // Extract resetCanvasView function
+            const match = code.match(/const resetCanvasView = \([^)]*\) => \{[\s\S]*?\n    \};/);
+            if (!match) {
+                return {
+                    name: 'resetCanvasView Function Check',
+                    pass: false,
+                    message: 'Could not find resetCanvasView function'
+                };
+            }
+            
+            const functionBody = match[0];
+            
+            // Check that labels get reset to centering transform
+            const resetsLabels = functionBody.includes("el.style.transform = 'translate(-50%, -50%)'");
+            
+            if (!resetsLabels) {
+                return {
+                    name: 'resetCanvasView Function Check',
+                    pass: false,
+                    message: 'resetCanvasView should reset labels to translate(-50%, -50%)',
+                    details: 'Labels need to be reset to centering transform only'
+                };
+            }
+            
+            // Check that it queries for .mp-label and .meta-label
+            const queriesLabels = functionBody.includes('.mp-label, .meta-label');
+            
+            if (!queriesLabels) {
+                return {
+                    name: 'resetCanvasView Function Check',
+                    pass: false,
+                    message: 'resetCanvasView should handle .mp-label and .meta-label',
+                    details: 'Both label types need transform reset'
+                };
+            }
+            
+            return {
+                name: 'resetCanvasView Function Check',
+                pass: true,
+                message: 'resetCanvasView correctly resets label transforms',
+                details: '✓ Resets labels to centering transform\n✓ Handles both mp-label and meta-label'
+            };
+        }
+        
+        async function testApplyCanvasZoom() {
+            const response = await fetch('../app.js');
+            const code = await response.text();
+            
+            // Extract applyCanvasZoom function
+            const match = code.match(/const applyCanvasZoom = \([^)]*\) => \{[\s\S]*?\n    \};/);
+            if (!match) {
+                return {
+                    name: 'applyCanvasZoom Function Check',
+                    pass: false,
+                    message: 'Could not find applyCanvasZoom function'
+                };
+            }
+            
+            const functionBody = match[0];
+            
+            // Check that it applies same transform to all layers
+            const appliesBackgroundTransform = functionBody.includes('dom.backgroundImg.style.transform = transform');
+            const appliesSvgTransform = functionBody.includes('dom.overlaySvg.style.transform = transform');
+            const appliesLabelsTransform = functionBody.includes('dom.labelsContainer.style.transform = transform');
+            
+            if (!appliesBackgroundTransform || !appliesSvgTransform || !appliesLabelsTransform) {
+                return {
+                    name: 'applyCanvasZoom Function Check',
+                    pass: false,
+                    message: 'applyCanvasZoom should apply same transform to all three layers',
+                    details: 'Background, SVG, and labels container must have identical transforms'
+                };
+            }
+            
+            // Verify it calls fitLabelsToView
+            const callsFitLabels = functionBody.includes('fitLabelsToView()');
+            
+            if (!callsFitLabels) {
+                return {
+                    name: 'applyCanvasZoom Function Check',
+                    pass: false,
+                    message: 'applyCanvasZoom should call fitLabelsToView()',
+                    details: 'Label positions need to be recalculated after zoom'
+                };
+            }
+            
+            return {
+                name: 'applyCanvasZoom Function Check',
+                pass: true,
+                message: 'applyCanvasZoom correctly applies uniform transform',
+                details: '✓ Same transform for background, SVG, and labels\n✓ Calls fitLabelsToView()'
+            };
+        }
+        
+        function displayResults(results) {
+            const container = document.getElementById('results');
+            const allPassed = results.every(r => r.pass);
+            
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.className = `test-result ${result.pass ? 'pass' : 'fail'}`;
+                
+                div.innerHTML = `
+                    <h2>${result.name}</h2>
+                    <div class="status ${result.pass ? 'pass' : 'fail'}">
+                        ${result.pass ? '✅ PASS' : '❌ FAIL'}
+                    </div>
+                    <p><strong>Message:</strong> ${result.message}</p>
+                    ${result.details ? `<pre>${result.details}</pre>` : ''}
+                `;
+                
+                container.appendChild(div);
+            });
+            
+            // Summary
+            const summary = document.createElement('div');
+            summary.className = `test-result ${allPassed ? 'pass' : 'fail'}`;
+            summary.innerHTML = `
+                <h2>Summary</h2>
+                <div class="status ${allPassed ? 'pass' : 'fail'}">
+                    ${results.filter(r => r.pass).length} / ${results.length} tests passed
+                </div>
+                ${allPassed ? '<p>🎉 All zoom fix validations passed! Labels should now stay glued to the background.</p>' : '<p>⚠️ Some validations failed. Review the issues above.</p>'}
+            `;
+            container.appendChild(summary);
+        }
+        
+        // Run tests on load
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>
