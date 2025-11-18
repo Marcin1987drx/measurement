@@ -284,10 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (svgGroup) {
             const lines = svgGroup.querySelectorAll('line');
             lines.forEach(line => {
-                const baseWidth = parseFloat(line.dataset.baseStrokeWidth || line.getAttribute('stroke-width')) * (line.dataset.baseStrokeWidth ? 1 : scale);
-                if (!line.dataset.baseStrokeWidth) {
-                    line.dataset.baseStrokeWidth = baseWidth;
-                }
+                // Base width was stored during renderCanvas
+                const baseWidth = parseFloat(line.dataset.baseStrokeWidth || 2);
                 line.setAttribute('stroke-width', baseWidth / scale);
             });
             
@@ -371,10 +369,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (svgGroup) {
             const lines = svgGroup.querySelectorAll('line');
             lines.forEach(line => {
-                if (line.dataset.baseStrokeWidth) {
-                    line.setAttribute('stroke-width', line.dataset.baseStrokeWidth);
-                    delete line.dataset.baseStrokeWidth;
-                }
+                // Reset to base width (scale = 1)
+                const baseWidth = parseFloat(line.dataset.baseStrokeWidth || 2);
+                line.setAttribute('stroke-width', baseWidth);
             });
             
             const handles = svgGroup.querySelectorAll('circle');
@@ -1159,6 +1156,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ✅ FIX: Scale stroke-width inversely to maintain constant visual size
                 const baseStrokeWidth = arrow.style?.width || mp.style?.width || 2;
                 line.setAttribute('stroke-width', baseStrokeWidth / currentScale);
+                // Store base width for use in applyCanvasZoom
+                line.dataset.baseStrokeWidth = baseStrokeWidth;
                 const head = arrow.style?.head || mp.style?.head;
                 if (head === 'arrow') line.setAttribute('marker-end', `url(#arrowhead)`);
                 else if (head === 'double') {
